@@ -60,6 +60,8 @@ public class MessageEntity
 
     public async Task Send(string? cookie, string? csrf, Logger logger)
     {
+        if (Completed == 1) return;
+
         await ThumbsUp(cookie, csrf);
 
         if (Code != 0) return;
