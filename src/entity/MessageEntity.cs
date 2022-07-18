@@ -41,8 +41,27 @@ public class MessageEntity
         return JObject.Parse(await response.Content.ReadAsStringAsync());
     }
 
+    private async Task ThumbsUp(string? cookie, string? csrf)
+    {
+        var payload = new Dictionary<string, string?>
+        {
+            { "roomid", RoomId },
+            { "csrf", csrf },
+            { "csrf_token", csrf }
+        };
+        await Globals.HttpClient.SendAsync(new HttpRequestMessage
+        {
+            Method = HttpMethod.Post,
+            RequestUri = new Uri("https://api.live.bilibili.com/xlive/web-ucenter/v1/interact/likeInteract"),
+            Headers = { { "Cookie", cookie } },
+            Content = new FormUrlEncodedContent(payload)
+        });
+    }
+
     public async Task Send(string? cookie, string? csrf, Logger logger)
     {
+        await ThumbsUp(cookie, csrf);
+
         if (Code != 0) return;
 
         JObject response = await PostMessage(cookie, csrf);
