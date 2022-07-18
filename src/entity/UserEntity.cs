@@ -22,4 +22,12 @@ public class UserEntity
             await message.Send(Cookie, Csrf, logger);
         }
     }
+
+    public async Task WatchLive(Logger logger)
+    {
+        List<TargetEntity> targets = await Globals.TargetRepository.GetUncompletedTargetsByUid(Uid);
+        var tasks = new List<Task>();
+        targets.ForEach(target => tasks.Add(target.Start(Cookie, Csrf, logger)));
+        await Task.WhenAll(tasks);
+    }
 }

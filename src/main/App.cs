@@ -24,6 +24,13 @@ public class App
         await Task.WhenAll(tasks);
     }
 
+    private async Task WatchLive(List<UserEntity> users)
+    {
+        var tasks = new List<Task>();
+        users.ForEach(user => tasks.Add(user.WatchLive(_logger)));
+        await Task.WhenAll(tasks);
+    }
+
     public async Task Main()
     {
         while (true)
@@ -32,6 +39,7 @@ public class App
             {
                 List<UserEntity> users = await Globals.UserRepository.GetUncompletedUsers(20);
                 await SendMessage(users);
+                await WatchLive(users);
             }
             catch (Exception e)
             {
