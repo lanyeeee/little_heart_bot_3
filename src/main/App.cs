@@ -19,9 +19,9 @@ public class App
 
     private async Task SendMessage(List<UserEntity> users)
     {
-        var messageTasks = new List<Task>();
-        users.ForEach(user => messageTasks.Add(user.SendMessage(_logger)));
-        await Task.WhenAll(messageTasks);
+        var tasks = new List<Task>();
+        users.ForEach(user => tasks.Add(user.SendMessage(_logger)));
+        await Task.WhenAll(tasks);
     }
 
     public async Task Main()
