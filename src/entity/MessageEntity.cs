@@ -58,7 +58,15 @@ public class MessageEntity
         else if (Code == -412)
         {
             await logger.Log(response);
+            await logger.Log($"uid {Uid} 弹幕发送失败");
             throw new ApiException();
+        }
+        else if (Code == -111 || Code == -101)
+        {
+            await logger.Log(response);
+            await logger.Log($"uid {Uid} 弹幕发送失败");
+            await Globals.UserRepository.MarkCookieError(Uid);
+            await Globals.MessageRepository.MarkCookieError(Uid, Code, Response);
         }
         else
         {

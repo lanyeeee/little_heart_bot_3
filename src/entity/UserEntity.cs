@@ -1,3 +1,5 @@
+using little_heart_bot_3.others;
+
 namespace little_heart_bot_3.entity;
 
 public class UserEntity
@@ -11,4 +13,13 @@ public class UserEntity
     public int TargetNum { get; set; }
     public string ReadTimestamp { get; set; }
     public string ConfigTimestamp { get; set; }
+
+    public async Task SendMessage(Logger logger)
+    {
+        List<MessageEntity> messages = await Globals.MessageRepository.GetMessagesByUid(Uid);
+        foreach (var message in messages)
+        {
+            await message.Send(Cookie, Csrf, logger);
+        }
+    }
 }

@@ -9,7 +9,7 @@ public class App
     public static App Instance => _instance ?? new App();
 
     private readonly Logger _logger;
-    private List<UserEntity> _users;
+
 
     private App()
     {
@@ -17,21 +17,30 @@ public class App
         _logger = new Logger("app");
     }
 
-    public async Task SendMessage()
+    private async Task SendMessage(List<UserEntity> users)
     {
-        foreach (var user in _users)
-        {
-            List<MessageEntity> messages = await Globals.MessageRepository.GetMessagesByUid(user.Uid);
-            foreach (var message in messages)
-            {
-                await message.Send(user.Cookie, user.Csrf, _logger);
-            }
-        }
+        var messageTasks = new List<Task>();
+        users.ForEach(user => messageTasks.Add(user.SendMessage(_logger)));
+        await Task.WhenAll(messageTasks);
     }
-
 
     public async Task Main()
     {
-        _users = await Globals.UserRepository.GetIncompletedUsers(20);
+        while (true)
+        {
+            try
+            {
+                List<UserEntity> users = await Globals.UserRepository.GetUncompletedUsers(20);
+                await SendMessage(users);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
+            finally
+            {
+                await Task.Delay(5000);
+            }
+        }
     }
 }
