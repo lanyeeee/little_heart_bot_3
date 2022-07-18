@@ -20,6 +20,14 @@ public class MessageRepository
         return result.ToList();
     }
 
+    public async Task MarkCookieError(string? uid, int? code, string? response)
+    {
+        string sql = "update message_table set code = @Code, response = @Response where uid = @Uid";
+        var parameters = new { Code = code, Response = response, Uid = uid };
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        await conn.ExecuteAsync(sql, parameters);
+    }
+
     public async Task Save(MessageEntity messageEntity)
     {
         string sql =

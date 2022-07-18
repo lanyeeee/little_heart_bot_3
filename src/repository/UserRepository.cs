@@ -13,11 +13,11 @@ public class UserRepository
         await conn.ExecuteAsync("update user_table set completed = 0, config_num = 0 where 1");
     }
 
-    public async Task<List<UserEntity>> GetIncompletedUsers(int num)
+    public async Task<List<UserEntity>> GetUncompletedUsers(int num)
     {
+        string sql = $"select * from user_table where completed = 0 and cookie_status >= 0 limit {num}";
         await using var conn = new MySqlConnection(Globals.ConnectionString);
-        var parameters = new { Num = num };
-        var result = await conn.QueryAsync<UserEntity>("select * from user_table limit @Num", parameters);
+        var result = await conn.QueryAsync<UserEntity>(sql);
         return result.ToList();
     }
 
