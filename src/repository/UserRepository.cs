@@ -26,4 +26,10 @@ public class UserRepository
         await using var conn = new MySqlConnection(Globals.ConnectionString);
         await conn.ExecuteAsync($"update user_table set cookie_status = -1 where uid = {uid}");
     }
+
+    public async Task SetCompleted(int completed, string? uid)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        await conn.ExecuteAsync($"update user_table set completed = {completed} where uid = {uid}");
+    }
 }

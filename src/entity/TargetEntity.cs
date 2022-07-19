@@ -19,11 +19,12 @@ public class TargetEntity
 
     private async Task<Dictionary<string, string?>> GetPayload(string? cookie, string? csrf, Logger logger)
     {
+        var uri = new Uri($"https://api.live.bilibili.com/xlive/web-room/v1/index/getInfoByRoom?&room_id={RoomId}");
+
         HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
         {
             Method = HttpMethod.Get,
-            RequestUri =
-                new Uri($"https://api.live.bilibili.com/xlive/web-room/v1/index/getInfoByRoom?&room_id={RoomId}"),
+            RequestUri = uri,
             Headers = { { "Cookie", cookie } }
         });
         JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
@@ -159,19 +160,52 @@ public class TargetEntity
         payload["id"] = id.ToString(Formatting.None);
     }
 
+    private async Task<int> GetExp()
+    {
+        var uri = new Uri(
+            $"https://api.live.bilibili.com/fans_medal/v1/fans_medal/get_fans_medal_info?uid={Uid}&target_id={TargetUid}");
+
+        HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+        {
+            Method = HttpMethod.Get,
+            RequestUri = uri
+        });
+
+        JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
+        return (int)response["data"]!["today_feed"]!;
+    }
+
+    private async Task<bool> IsCompleted()
+    {
+        Exp = await GetExp();
+        await Globals.TargetRepository.SetExp(Exp, Id);
+        Console.WriteLine($"{TargetName}:{Exp}");
+
+        if (Exp != 1500) return false;
+
+        Completed = 1;
+        await Globals.TargetRepository.SetCompleted(Completed, Id);
+        return true;
+    }
+
     private async Task HeartBeat(string? cookie, Dictionary<string, string?> payload, Logger logger)
     {
         await Task.Delay(int.Parse(payload["heartbeat_interval"]!) * 1000);
         while (true)
         {
-            Console.WriteLine(JsonConvert.SerializeObject(payload));
             await PostX(cookie, payload, logger);
+
+            int? seq = (int?)JArray.Parse(payload["id"]!)[2];
+            if (seq % 5 == 0 && await IsCompleted()) return;
+
             await Task.Delay(int.Parse(payload["heartbeat_interval"]!) * 1000);
         }
     }
 
     public async Task Start(string? cookie, string? csrf, Logger logger)
     {
+        if (await IsCompleted()) return;
+
         Dictionary<string, string?> payload = await PostE(cookie, csrf, logger);
         JArray id = JArray.Parse(payload["id"]!);
         if ((int?)id[0] == 0 || (int?)id[1] == 0) return;

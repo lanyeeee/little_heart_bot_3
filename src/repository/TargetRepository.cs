@@ -20,4 +20,16 @@ public class TargetRepository
         var result = await conn.QueryAsync<TargetEntity>(sql);
         return result.ToList();
     }
+
+    public async Task SetExp(int exp, int id)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        await conn.ExecuteAsync($"update target_table set exp = {exp} where id = {id}");
+    }
+
+    public async Task SetCompleted(int completed, int id)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        await conn.ExecuteAsync($"update target_table set completed = {completed} where id = {id}");
+    }
 }

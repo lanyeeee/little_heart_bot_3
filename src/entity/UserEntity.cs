@@ -29,5 +29,11 @@ public class UserEntity
         var tasks = new List<Task>();
         targets.ForEach(target => tasks.Add(target.Start(Cookie, Csrf, logger)));
         await Task.WhenAll(tasks);
+
+        targets = await Globals.TargetRepository.GetUncompletedTargetsByUid(Uid);
+        if (targets.Count != 0) return;
+
+        Completed = 1;
+        await Globals.UserRepository.SetCompleted(Completed, Uid);
     }
 }

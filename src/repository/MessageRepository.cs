@@ -20,7 +20,7 @@ public class MessageRepository
         return result.ToList();
     }
 
-    public async Task MarkCookieError(string? uid, int? code, string? response)
+    public async Task MarkCookieError(int? code, string? response, string? uid)
     {
         string sql = "update message_table set code = @Code, response = @Response where uid = @Uid";
         var parameters = new { Code = code, Response = response, Uid = uid };
@@ -28,11 +28,17 @@ public class MessageRepository
         await conn.ExecuteAsync(sql, parameters);
     }
 
-    public async Task Save(MessageEntity messageEntity)
+    public async Task SetCodeAndResponse(int? code, string? response, int id)
     {
-        string sql =
-            "update message_table set uid = @Uid, target_uid = @TargetUid, target_name = @TargetName, room_id = @RoomId, content = @Content, code = @Code, response = @Response, completed = @Completed where id = @Id";
+        string sql = "update message_table set code = @Code, response = @Response where id = @Id";
+        var parameters = new { Code = code, Response = response, Id = id };
         await using var conn = new MySqlConnection(Globals.ConnectionString);
-        await conn.ExecuteAsync(sql, messageEntity);
+        await conn.ExecuteAsync(sql, parameters);
+    }
+
+    public async Task SetCompleted(int completed, int id)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        await conn.ExecuteAsync($"update message_table set completed = {completed} where id = {id}");
     }
 }
