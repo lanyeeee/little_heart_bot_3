@@ -15,9 +15,16 @@ public class UserRepository
 
     public async Task<List<UserEntity>> GetUncompletedUsers(int num)
     {
-        string sql = $"select * from user_table where completed = 0 and cookie_status >= 0 limit {num}";
+        string sql = $"select * from user_table where completed = 0 and cookie_status = 1 limit {num}";
         await using var conn = new MySqlConnection(Globals.ConnectionString);
         var result = await conn.QueryAsync<UserEntity>(sql);
+        return result.ToList();
+    }
+
+    public async Task<List<UserEntity>> GetUnverifiedUsers()
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        var result = await conn.QueryAsync<UserEntity>("select * from user_table where cookie_status = 0");
         return result.ToList();
     }
 
@@ -25,5 +32,17 @@ public class UserRepository
     {
         await using var conn = new MySqlConnection(Globals.ConnectionString);
         await conn.ExecuteAsync($"update user_table set cookie_status = -1 where uid = {uid}");
+    }
+
+    public async Task MarkCookieValid(string? uid)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        await conn.ExecuteAsync($"update user_table set cookie_status = 1 where uid = {uid}");
+    }
+
+    public async Task SetCompleted(int completed, string? uid)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        await conn.ExecuteAsync($"update user_table set completed = {completed} where uid = {uid}");
     }
 }

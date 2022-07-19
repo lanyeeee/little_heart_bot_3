@@ -70,11 +70,12 @@ public class MessageEntity
 
         Code = (int?)response["code"];
         Response = response.ToString();
+        await Globals.MessageRepository.SetCodeAndResponse(Code, Response, Id);
 
         if (Code == 0)
         {
             Completed = 1;
-            await Globals.MessageRepository.Save(this);
+            await Globals.MessageRepository.SetCompleted(Completed, Id);
         }
         else if (Code == -412)
         {
@@ -87,13 +88,12 @@ public class MessageEntity
             await logger.Log(response);
             await logger.Log($"uid {Uid} 弹幕发送失败");
             await Globals.UserRepository.MarkCookieError(Uid);
-            await Globals.MessageRepository.MarkCookieError(Uid, Code, Response);
+            await Globals.MessageRepository.MarkCookieError(Code, Response, Uid);
         }
         else
         {
             await logger.Log(response);
             await logger.Log($"uid {Uid} 弹幕发送失败");
-            await Globals.MessageRepository.Save(this);
         }
 
         await Task.Delay(3000);
