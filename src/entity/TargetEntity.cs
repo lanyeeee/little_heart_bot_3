@@ -1,4 +1,6 @@
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text;
 using little_heart_bot_3.others;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -69,7 +71,6 @@ public class TargetEntity
 
         JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
 
-        Console.WriteLine(response);
         int? code = (int?)response["code"];
         if (code != 0)
         {
@@ -86,9 +87,95 @@ public class TargetEntity
         return payload;
     }
 
+    private async Task<string?> GenerateS(Dictionary<string, string?> payload, string ts)
+    {
+        var t = new JObject
+        {
+            { "id", JArray.Parse(payload["id"]!) },
+            { "device", payload["device"] },
+            { "ets", int.Parse(payload["ets"]!) },
+            { "benchmark", payload["secret_key"] },
+            { "time", int.Parse(payload["heartbeat_interval"]!) },
+            { "ts", long.Parse(ts) },
+            { "ua", payload["ua"] }
+        };
+
+        var sPayload = new JObject
+        {
+            { "t", t },
+            { "r", payload["secret_rule"] }
+        };
+
+        HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+        {
+            Method = HttpMethod.Post,
+            RequestUri = new Uri("http://localhost:3000/enc"),
+            Content = new StringContent(JsonConvert.SerializeObject(sPayload), Encoding.UTF8, "application/json")
+        });
+        JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
+
+        return (string?)response["s"];
+    }
+
+    private async Task PostX(string? cookie, Dictionary<string, string?> payload, Logger logger)
+    {
+        string ts = DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString();
+        var xPayload = new Dictionary<string, string?>
+        {
+            { "s", await GenerateS(payload, ts) },
+            { "id", payload["id"] },
+            { "device", payload["device"] },
+            { "ets", payload["ets"] },
+            { "benchmark", payload["secret_key"] },
+            { "time", payload["heartbeat_interval"] },
+            { "ts", ts },
+            { "ua", payload["ua"] },
+            { "csrf_token", payload["csrf"] },
+            { "csrf", payload["csrf"] },
+            { "visit_id", "" }
+        };
+        HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+        {
+            Method = HttpMethod.Post,
+            RequestUri = new Uri("https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/X"),
+            Headers = { { "Cookie", cookie } },
+            Content = new FormUrlEncodedContent(xPayload)
+        });
+        JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
+
+        int? code = (int?)response["code"];
+        if (code != 0)
+        {
+            await logger.Log(response);
+            await logger.Log($"uid {Uid} 发送X心跳包失败");
+            throw new ApiException();
+        }
+
+        payload["ets"] = (string?)response["data"]!["timestamp"];
+        payload["secret_key"] = (string?)response["data"]!["secret_key"];
+        payload["heartbeat_interval"] = (string?)response["data"]!["heartbeat_interval"];
+        JArray id = JArray.Parse(payload["id"]!);
+        id[2] = (int?)id[2] + 1;
+        payload["id"] = id.ToString(Formatting.None);
+    }
+
+    private async Task HeartBeat(string? cookie, Dictionary<string, string?> payload, Logger logger)
+    {
+        await Task.Delay(int.Parse(payload["heartbeat_interval"]!) * 1000);
+        while (true)
+        {
+            Console.WriteLine(JsonConvert.SerializeObject(payload));
+            await PostX(cookie, payload, logger);
+            await Task.Delay(int.Parse(payload["heartbeat_interval"]!) * 1000);
+        }
+    }
 
     public async Task Start(string? cookie, string? csrf, Logger logger)
     {
         Dictionary<string, string?> payload = await PostE(cookie, csrf, logger);
+        JArray id = JArray.Parse(payload["id"]!);
+        if ((int?)id[0] == 0 || (int?)id[1] == 0) return;
+
+        await HeartBeat(cookie, payload, logger);
     }
 }
