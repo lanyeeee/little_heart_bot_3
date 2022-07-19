@@ -24,12 +24,11 @@ public class TargetEntity
         HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
         {
             Method = HttpMethod.Get,
-            RequestUri = uri,
-            Headers = { { "Cookie", cookie } }
+            RequestUri = uri
         });
         JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
-
         int? code = (int?)response["code"];
+
         if (code != 0)
         {
             await logger.Log(response);
@@ -179,7 +178,7 @@ public class TargetEntity
     {
         Exp = await GetExp();
         await Globals.TargetRepository.SetExp(Exp, Id);
-        Console.WriteLine($"{TargetName}:{Exp}");
+        Console.WriteLine($"{TargetName}:{Exp}"); //TODO   测试用
 
         if (Exp != 1500) return false;
 
@@ -190,15 +189,25 @@ public class TargetEntity
 
     private async Task HeartBeat(string? cookie, Dictionary<string, string?> payload, Logger logger)
     {
-        await Task.Delay(int.Parse(payload["heartbeat_interval"]!) * 1000);
+        int interval = int.Parse(payload["heartbeat_interval"]!);
+        int watchSeconds = 0;
+
+        await Task.Delay(interval * 1000);
+
         while (true)
         {
             await PostX(cookie, payload, logger);
 
-            int? seq = (int?)JArray.Parse(payload["id"]!)[2];
-            if (seq % 5 == 0 && await IsCompleted()) return;
+            interval = int.Parse(payload["heartbeat_interval"]!);
+            watchSeconds += interval;
 
-            await Task.Delay(int.Parse(payload["heartbeat_interval"]!) * 1000);
+            //观看时长超过70分钟则返回
+            if (watchSeconds >= 70 * 60) return;
+
+            //每隔5分钟检查一次是否完成，完成则返回
+            if (watchSeconds % 300 == 0 && await IsCompleted()) return;
+
+            await Task.Delay(interval * 1000);
         }
     }
 
@@ -207,6 +216,7 @@ public class TargetEntity
         if (await IsCompleted()) return;
 
         Dictionary<string, string?> payload = await PostE(cookie, csrf, logger);
+
         JArray id = JArray.Parse(payload["id"]!);
         if ((int?)id[0] == 0 || (int?)id[1] == 0) return;
 
