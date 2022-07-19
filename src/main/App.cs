@@ -1,5 +1,6 @@
 using little_heart_bot_3.entity;
 using little_heart_bot_3.others;
+using Newtonsoft.Json.Linq;
 
 namespace little_heart_bot_3.main;
 
@@ -17,10 +18,52 @@ public class App
         _logger = new Logger("app");
     }
 
+    private async Task VerifyCookies()
+    {
+        List<UserEntity> users = await Globals.UserRepository.GetUnverifiedUsers();
+        foreach (var user in users)
+        {
+            HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+            {
+                Method = HttpMethod.Get,
+                RequestUri = new Uri("https://api.bilibili.com/x/web-interface/nav"),
+                Headers = { { "Cookie", user.Cookie } }
+            });
+            await Task.Delay(1000);
+
+            JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
+            int? code = (int?)response["code"];
+
+            if (code == -412)
+            {
+                await _logger.Log(response);
+                throw new ApiException();
+            }
+
+            if (code != 0)
+            {
+                await _logger.Log(response);
+                await _logger.Log($"uid {user.Uid} 提供的cookie错误或已过期");
+                await Globals.UserRepository.MarkCookieError(user.Uid);
+            }
+            else
+            {
+                await Globals.UserRepository.MarkCookieValid(user.Uid);
+            }
+        }
+    }
+
     private async Task SendMessage(List<UserEntity> users)
     {
         var tasks = new List<Task>();
         users.ForEach(user => tasks.Add(user.SendMessage(_logger)));
+        await Task.WhenAll(tasks);
+    }
+
+    private async Task WatchLive(List<UserEntity> users)
+    {
+        var tasks = new List<Task>();
+        users.ForEach(user => tasks.Add(user.WatchLive(_logger)));
         await Task.WhenAll(tasks);
     }
 
@@ -30,8 +73,10 @@ public class App
         {
             try
             {
+                await VerifyCookies();
                 List<UserEntity> users = await Globals.UserRepository.GetUncompletedUsers(20);
                 await SendMessage(users);
+                await WatchLive(users);
             }
             catch (Exception e)
             {
