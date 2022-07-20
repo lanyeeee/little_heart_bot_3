@@ -178,7 +178,9 @@ public class TargetEntity
     {
         Exp = await GetExp();
         await Globals.TargetRepository.SetExp(Exp, Id);
-        Console.WriteLine($"{TargetName}:{Exp}"); //TODO   测试用
+#if DEBUG
+        Console.WriteLine($"uid {Uid}: {TargetName}:{Exp}");
+#endif
 
         if (Exp != 1500) return false;
 

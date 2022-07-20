@@ -62,15 +62,18 @@ public class MessageEntity
         if (code == -111 || code == -101)
         {
             await logger.Log(response);
-            await logger.Log($"uid {Uid} 点赞失败");
+            await logger.Log($"uid {Uid} 给 {TargetName} 点赞失败");
             await Globals.UserRepository.MarkCookieError(Uid);
             await Globals.MessageRepository.MarkCookieError(Code, Response, Uid);
         }
         else if (code != 0)
         {
             await logger.Log(response);
-            await logger.Log($"uid {Uid} 点赞失败");
+            await logger.Log($"uid {Uid} 给 {TargetName} 点赞失败");
         }
+#if DEBUG
+        if (code == 0) Console.WriteLine($"uid {Uid} 给 {TargetName} 点赞成功");
+#endif
     }
 
     public async Task Send(string? cookie, string? csrf, Logger logger)
@@ -91,24 +94,27 @@ public class MessageEntity
         {
             Completed = 1;
             await Globals.MessageRepository.SetCompleted(Completed, Id);
+#if DEBUG
+            Console.WriteLine($"uid {Uid} 给 {TargetName} 发送弹幕成功");
+#endif
         }
         else if (Code == -412)
         {
             await logger.Log(response);
-            await logger.Log($"uid {Uid} 弹幕发送失败");
+            await logger.Log($"uid {Uid} 给 {TargetName} 发送弹幕失败");
             throw new ApiException();
         }
         else if (Code == -111 || Code == -101)
         {
             await logger.Log(response);
-            await logger.Log($"uid {Uid} 弹幕发送失败");
+            await logger.Log($"uid {Uid} 给 {TargetName} 发送弹幕失败");
             await Globals.UserRepository.MarkCookieError(Uid);
             await Globals.MessageRepository.MarkCookieError(Code, Response, Uid);
         }
         else
         {
             await logger.Log(response);
-            await logger.Log($"uid {Uid} 弹幕发送失败");
+            await logger.Log($"uid {Uid} 给 {TargetName} 发送弹幕失败");
         }
 
         await Task.Delay(3000);

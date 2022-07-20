@@ -78,6 +78,16 @@ public class App
                 await SendMessage(users);
                 await WatchLive(users);
             }
+            catch (ApiException)
+            {
+                int cd = 15;
+                while (cd != 0)
+                {
+                    await _logger.Log($"请求过于频繁，还需冷却 {cd} 分钟");
+                    await Task.Delay(cd * 60 * 1000);
+                    cd--;
+                }
+            }
             catch (Exception e)
             {
                 Console.WriteLine(e);
