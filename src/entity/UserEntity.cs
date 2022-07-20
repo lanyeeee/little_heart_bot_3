@@ -26,6 +26,9 @@ public class UserEntity
     public async Task WatchLive(Logger logger)
     {
         List<TargetEntity> targets = await Globals.TargetRepository.GetUncompletedTargetsByUid(Uid);
+#if DEBUG
+        Console.WriteLine($"uid {Uid}: targets.Count={targets.Count}");
+#endif
         var tasks = new List<Task>();
         targets.ForEach(target => tasks.Add(target.Start(Cookie, Csrf, logger)));
         await Task.WhenAll(tasks);
