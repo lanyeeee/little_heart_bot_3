@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net.NetworkInformation;
 using System.Text;
 using little_heart_bot_3.others;
 using Newtonsoft.Json;
@@ -15,6 +16,7 @@ public class TargetEntity
     public string? TargetName { get; set; }
     public string? RoomId { get; set; }
     public int Exp { get; set; }
+    public int WatchedSeconds { get; set; }
     public int Completed { get; set; }
 
     private async Task<Dictionary<string, string?>> GetPayload(string? cookie, string? csrf, Logger logger)
@@ -119,6 +121,7 @@ public class TargetEntity
 
     private async Task PostX(string? cookie, Dictionary<string, string?> payload, Logger logger)
     {
+        Again:
         string ts = DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString();
         var xPayload = new Dictionary<string, string?>
         {
@@ -144,10 +147,16 @@ public class TargetEntity
         JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
 
         int? code = (int?)response["code"];
+        if (code == -504)
+        {
+            await Task.Delay(1000);
+            goto Again;
+        }
+
         if (code != 0)
         {
             await logger.Log(response);
-            await logger.Log($"uid {Uid} 发送X心跳包失败");
+            await logger.Log($"uid {Uid} 给 {TargetName} 发送X心跳包失败");
             throw new ApiException();
         }
 
@@ -174,25 +183,28 @@ public class TargetEntity
         return (int)response["data"]!["today_feed"]!;
     }
 
-    private async Task<bool> IsCompleted()
+    private async Task<bool> IsCompleted(Logger logger)
     {
         Exp = await GetExp();
         await Globals.TargetRepository.SetExp(Exp, Id);
 #if DEBUG
         Console.WriteLine($"uid {Uid}: {TargetName}:{Exp}");
 #endif
+        //经验达到1500或观看时长超过70分钟则判定为完成
+        if (Exp == 1500 || WatchedSeconds >= 70 * 60)
+        {
+            Completed = 1;
+            await logger.Log($"uid {Uid} 在 {TargetName} 的任务完成，观看时长 {WatchedSeconds / 60} 分钟，获得经验 {Exp}");
+            await Globals.TargetRepository.SetCompleted(Completed, Id);
+            return true;
+        }
 
-        if (Exp != 1500) return false;
-
-        Completed = 1;
-        await Globals.TargetRepository.SetCompleted(Completed, Id);
-        return true;
+        return false;
     }
 
     private async Task HeartBeat(string? cookie, Dictionary<string, string?> payload, Logger logger)
     {
         int interval = int.Parse(payload["heartbeat_interval"]!);
-        int watchSeconds = 0;
 
         await Task.Delay(interval * 1000);
 
@@ -201,13 +213,11 @@ public class TargetEntity
             await PostX(cookie, payload, logger);
 
             interval = int.Parse(payload["heartbeat_interval"]!);
-            watchSeconds += interval;
-
-            //观看时长超过70分钟则返回
-            if (watchSeconds >= 70 * 60) return;
+            WatchedSeconds += interval;
+            await Globals.TargetRepository.SetWatchedSeconds(WatchedSeconds, Id);
 
             //每隔5分钟检查一次是否完成，完成则返回
-            if (watchSeconds % 300 == 0 && await IsCompleted()) return;
+            if (WatchedSeconds % 300 == 0 && await IsCompleted(logger)) return;
 
             await Task.Delay(interval * 1000);
         }
@@ -215,7 +225,7 @@ public class TargetEntity
 
     public async Task Start(string? cookie, string? csrf, Logger logger)
     {
-        if (await IsCompleted()) return;
+        if (await IsCompleted(logger)) return;
 
         Dictionary<string, string?> payload = await PostE(cookie, csrf, logger);
 

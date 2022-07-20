@@ -10,7 +10,7 @@ public class TargetRepository
     public async Task NewDay()
     {
         await using var conn = new MySqlConnection(Globals.ConnectionString);
-        await conn.ExecuteAsync("update target_table set exp = 0, completed = 0 where 1");
+        await conn.ExecuteAsync("update target_table set exp = 0,watched_seconds = 0, completed = 0 where 1");
     }
 
     public async Task<List<TargetEntity>> GetUncompletedTargetsByUid(string? uid)
@@ -31,5 +31,11 @@ public class TargetRepository
     {
         await using var conn = new MySqlConnection(Globals.ConnectionString);
         await conn.ExecuteAsync($"update target_table set completed = {completed} where id = {id}");
+    }
+
+    public async Task SetWatchedSeconds(int watchedSeconds, int id)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        await conn.ExecuteAsync($"update target_table set watched_seconds = {watchedSeconds} where id = {id}");
     }
 }
