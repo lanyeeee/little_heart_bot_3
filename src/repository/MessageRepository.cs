@@ -41,4 +41,10 @@ public class MessageRepository
         await using var conn = new MySqlConnection(Globals.ConnectionString);
         await conn.ExecuteAsync($"update message_table set completed = {completed} where id = {id}");
     }
+
+    public async Task DeleteByUidAndTargetUid(string? uid, string? targetUid)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        await conn.ExecuteAsync($"delete from message_table where uid = {uid} and target_uid = {targetUid}");
+    }
 }

@@ -119,79 +119,118 @@ public class TargetEntity
         return (string?)response["s"];
     }
 
-    private async Task PostX(string? cookie, Dictionary<string, string?> payload, Logger logger)
+    private async Task<bool> PostX(string? cookie, Dictionary<string, string?> payload, Logger logger)
     {
         Again:
-        string ts = DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString();
-        var xPayload = new Dictionary<string, string?>
+        try
         {
-            { "s", await GenerateS(payload, ts) },
-            { "id", payload["id"] },
-            { "device", payload["device"] },
-            { "ets", payload["ets"] },
-            { "benchmark", payload["secret_key"] },
-            { "time", payload["heartbeat_interval"] },
-            { "ts", ts },
-            { "ua", payload["ua"] },
-            { "csrf_token", payload["csrf"] },
-            { "csrf", payload["csrf"] },
-            { "visit_id", "" }
-        };
-        HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
-        {
-            Method = HttpMethod.Post,
-            RequestUri = new Uri("https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/X"),
-            Headers = { { "Cookie", cookie } },
-            Content = new FormUrlEncodedContent(xPayload)
-        });
-        JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
+            string ts = DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString();
+            var xPayload = new Dictionary<string, string?>
+            {
+                { "s", await GenerateS(payload, ts) },
+                { "id", payload["id"] },
+                { "device", payload["device"] },
+                { "ets", payload["ets"] },
+                { "benchmark", payload["secret_key"] },
+                { "time", payload["heartbeat_interval"] },
+                { "ts", ts },
+                { "ua", payload["ua"] },
+                { "csrf_token", payload["csrf"] },
+                { "csrf", payload["csrf"] },
+                { "visit_id", "" }
+            };
+            HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+            {
+                Method = HttpMethod.Post,
+                RequestUri = new Uri("https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/X"),
+                Headers = { { "Cookie", cookie } },
+                Content = new FormUrlEncodedContent(xPayload)
+            });
+            JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
 
-        int? code = (int?)response["code"];
-        if (code == -504)
+            int? code = (int?)response["code"];
+            if (code == -504)
+            {
+#if DEBUG
+                Console.WriteLine($"uid {Uid} 给 {TargetName} 发送X心跳包失败，服务器调用超时");
+#endif
+                await Task.Delay(1000);
+                goto Again;
+            }
+
+            if (code == 1012002)
+            {
+                await logger.Log(response);
+                await logger.Log($"uid {Uid} 给 {TargetName} 发送X心跳包失败");
+                return true;
+            }
+
+            if (code != 0)
+            {
+                await logger.Log(response);
+                await logger.Log($"uid {Uid} 给 {TargetName} 发送X心跳包失败");
+                throw new ApiException();
+            }
+
+            payload["ets"] = (string?)response["data"]!["timestamp"];
+            payload["secret_key"] = (string?)response["data"]!["secret_key"];
+            payload["heartbeat_interval"] = (string?)response["data"]!["heartbeat_interval"];
+            JArray id = JArray.Parse(payload["id"]!);
+            id[2] = (int?)id[2] + 1;
+            payload["id"] = id.ToString(Formatting.None);
+            return false;
+        }
+        catch (HttpRequestException)
         {
+#if DEBUG
+            Console.WriteLine($"uid {Uid} 给 {TargetName} 发送X心跳包失败，网络原因");
+#endif
             await Task.Delay(1000);
             goto Again;
         }
-
-        if (code != 0)
-        {
-            await logger.Log(response);
-            await logger.Log($"uid {Uid} 给 {TargetName} 发送X心跳包失败");
-            throw new ApiException();
-        }
-
-        payload["ets"] = (string?)response["data"]!["timestamp"];
-        payload["secret_key"] = (string?)response["data"]!["secret_key"];
-        payload["heartbeat_interval"] = (string?)response["data"]!["heartbeat_interval"];
-        JArray id = JArray.Parse(payload["id"]!);
-        id[2] = (int?)id[2] + 1;
-        payload["id"] = id.ToString(Formatting.None);
     }
 
-    private async Task<int> GetExp()
+    private async Task<int> GetExp(Logger logger)
     {
-        var uri = new Uri(
-            $"https://api.live.bilibili.com/fans_medal/v1/fans_medal/get_fans_medal_info?uid={Uid}&target_id={TargetUid}");
-
-        HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+        try
         {
-            Method = HttpMethod.Get,
-            RequestUri = uri
-        });
+            var uri = new Uri(
+                $"https://api.live.bilibili.com/fans_medal/v1/fans_medal/get_fans_medal_info?uid={Uid}&target_id={TargetUid}");
 
-        JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
-        return (int)response["data"]!["today_feed"]!;
+            HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+            {
+                Method = HttpMethod.Get,
+                RequestUri = uri
+            });
+
+            JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
+            return (int)response["data"]!["today_feed"]!;
+        }
+        catch (ArgumentException)
+        {
+            await logger.Log($"uid {Uid} 未持有 {TargetName} 的粉丝牌");
+            await Globals.TargetRepository.Delete(Id);
+            await Globals.MessageRepository.DeleteByUidAndTargetUid(Uid, TargetUid);
+            return -1;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            return -1;
+        }
     }
 
     private async Task<bool> IsCompleted(Logger logger)
     {
-        Exp = await GetExp();
+        Exp = await GetExp(logger);
+        if (Exp == -1) return true;
+
         await Globals.TargetRepository.SetExp(Exp, Id);
 #if DEBUG
         Console.WriteLine($"uid {Uid}: {TargetName}:{Exp}");
 #endif
-        //经验达到1500或观看时长超过70分钟则判定为完成
-        if (Exp == 1500 || WatchedSeconds >= 70 * 60)
+        //经验达到1500或观看时长超过75分钟则判定为完成
+        if (Exp == 1500 || WatchedSeconds >= 75 * 60)
         {
             Completed = 1;
             await logger.Log($"uid {Uid} 在 {TargetName} 的任务完成，观看时长 {WatchedSeconds / 60} 分钟，获得经验 {Exp}");
@@ -210,7 +249,8 @@ public class TargetEntity
 
         while (true)
         {
-            await PostX(cookie, payload, logger);
+            //如果发送X心跳包失败，则返回
+            if (await PostX(cookie, payload, logger)) return;
 
             interval = int.Parse(payload["heartbeat_interval"]!);
             WatchedSeconds += interval;

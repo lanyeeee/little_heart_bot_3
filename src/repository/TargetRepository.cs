@@ -38,4 +38,10 @@ public class TargetRepository
         await using var conn = new MySqlConnection(Globals.ConnectionString);
         await conn.ExecuteAsync($"update target_table set watched_seconds = {watchedSeconds} where id = {id}");
     }
+
+    public async Task Delete(int id)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        await conn.ExecuteAsync($"delete from target_table where id = {id}");
+    }
 }
