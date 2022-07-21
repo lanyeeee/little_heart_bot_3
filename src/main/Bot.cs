@@ -78,6 +78,11 @@ public class Bot
         return response["data"];
     }
 
+    private string GetCsrf(string cookie)
+    {
+        return cookie.Substring(cookie.IndexOf("bili_jct=", StringComparison.Ordinal) + 9, 32);
+    }
+
     private async Task HandleCommand(string uid, string command, string? parameter)
     {
         if (command == "/target_set")
@@ -151,6 +156,29 @@ public class Bot
 
             await Globals.UserRepository.Update(userEntity);
             _users[uid] = userEntity;
+        }
+        else if (command == "/cookie_commit")
+        {
+            try
+            {
+                if (parameter == null) return;
+
+                var userEntity = await Globals.UserRepository.Get(uid);
+                if (userEntity == null) return;
+
+                userEntity.Cookie = parameter.Replace("\n", "");
+                userEntity.Csrf = GetCsrf(userEntity.Cookie);
+                userEntity.CookieStatus = 0;
+
+                await Globals.UserRepository.Update(userEntity);
+            }
+            catch (Exception e)
+            {
+#if DEBUG
+                Console.WriteLine(e);
+#endif
+                await _logger.Log($"uid {uid} 提交的cookie有误");
+            }
         }
     }
 
