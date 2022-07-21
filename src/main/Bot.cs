@@ -145,6 +145,7 @@ public class Bot
         {
             if (parameter == null) return;
             string targetUid = parameter;
+            if (!targetUid.IsNumeric()) return;
             await Globals.TargetRepository.DeleteByUidAndTargetUid(uid, targetUid);
         }
         else if (command == "/delete")

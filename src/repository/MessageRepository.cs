@@ -45,8 +45,9 @@ public class MessageRepository
     public async Task SetCompletedByUidAndTargetUid(int completed, string uid, string targetUid)
     {
         await using var conn = new MySqlConnection(Globals.ConnectionString);
-        await conn.ExecuteAsync(
-            $"update message_table set completed = {completed} where uid = {uid} and target_uid = {targetUid}");
+        string sql = "update message_table set completed = @Completed where uid = @Uid and target_uid = @TargetUid";
+        var parameters = new { Completed = completed, Uid = uid, TargetUid = targetUid };
+        await conn.ExecuteAsync(sql, parameters);
     }
 
     public async Task DeleteByUid(string? uid)
@@ -63,9 +64,11 @@ public class MessageRepository
 
     public async Task<bool> CheckExistByUidAndTargetUid(string uid, string targetUid)
     {
+        string sql = "select * from message_table where uid = @Uid and target_uid = @TargetUid";
+        var parameters = new { Uid = uid, TargetUid = targetUid };
+
         await using var conn = new MySqlConnection(Globals.ConnectionString);
-        string sql = $"select * from message_table where uid = {uid} and target_uid = {targetUid}";
-        var result = await conn.QueryAsync<TargetEntity>(sql);
+        var result = await conn.QueryAsync<TargetEntity>(sql, parameters);
         return result.ToList().Count != 0;
     }
 
