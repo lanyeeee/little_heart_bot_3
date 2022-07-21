@@ -22,7 +22,7 @@ public class Bot
 
     private async Task CheckNewDay()
     {
-        if (DateTimeOffset.Now.ToUnixTimeSeconds() - _midnight < 24 * 60 * 60 + 10 * 60) return;
+        if (DateTimeOffset.Now.ToUnixTimeSeconds() - _midnight < 24 * 60 * 60 + 3 * 60) return;
 
         //新的一天要把一些数据重置
         DateTimeOffset today = DateTime.Today;
