@@ -1,6 +1,3 @@
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Net.NetworkInformation;
 using System.Text;
 using little_heart_bot_3.others;
 using Newtonsoft.Json;

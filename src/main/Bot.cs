@@ -1,4 +1,6 @@
+using little_heart_bot_3.entity;
 using little_heart_bot_3.others;
+using Newtonsoft.Json.Linq;
 
 namespace little_heart_bot_3.main;
 
@@ -11,13 +13,22 @@ public class Bot
     private bool _talking = true;
     private int _talkNum;
     private long _midnight; //今天0点的分钟时间戳
+    private BotEntity _botEntity;
+
 
     private Bot()
     {
         _instance = this;
+
         DateTimeOffset today = DateTime.Today;
         _midnight = today.ToUnixTimeSeconds();
+
         _logger = new Logger("bot");
+
+        _botEntity = Globals.BotRepository.GetBot();
+        Globals.AppStatus = _botEntity.AppStatus;
+        Globals.SendStatus = _botEntity.SendStatus;
+        Globals.ReceiveStatus = _botEntity.ReceiveStatus;
     }
 
     private async Task CheckNewDay()
@@ -33,17 +44,21 @@ public class Bot
         await Globals.UserRepository.NewDay();
     }
 
-    public async Task Main()
+    private async Task BotMain()
     {
         while (true)
         {
             try
             {
                 await CheckNewDay();
+                Globals.SendStatus = 0;
+                Globals.ReceiveStatus = 0;
             }
             catch (ApiException)
             {
                 int cd = 15;
+                Globals.SendStatus = -1;
+                Globals.ReceiveStatus = -1;
                 while (cd != 0)
                 {
                     await _logger.Log($"请求过于频繁，还需冷却 {cd} 分钟");
@@ -60,5 +75,14 @@ public class Bot
                 await Task.Delay(5000);
             }
         }
+    }
+
+    public async Task Main()
+    {
+        var tasks = new List<Task>
+        {
+            _botEntity.UpdateSign(_logger), BotMain()
+        };
+        await Task.WhenAll(tasks);
     }
 }

@@ -7,9 +7,9 @@ namespace little_heart_bot_3.repository;
 
 public class BotRepository
 {
-    public async Task<BotEntity> GetBot()
+    public BotEntity GetBot()
     {
-        await using var conn = new MySqlConnection(Globals.ConnectionString);
-        return await conn.QueryFirstAsync("select * from bot_table");
+        using var conn = new MySqlConnection(Globals.ConnectionString);
+        return conn.QueryFirst<BotEntity>("select * from bot_table");
     }
 }
