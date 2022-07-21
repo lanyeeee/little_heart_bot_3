@@ -10,7 +10,7 @@ public class MessageRepository
     public async Task NewDay()
     {
         await using var conn = new MySqlConnection(Globals.ConnectionString);
-        await conn.ExecuteAsync("update message_table set code = 0, completed = 0 where 1");
+        await conn.ExecuteAsync("update message_table set code = 0, response = null, completed = 0 where 1");
     }
 
     public async Task<List<MessageEntity>> GetMessagesByUid(string? uid)

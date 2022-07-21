@@ -45,4 +45,10 @@ public class UserRepository
         await using var conn = new MySqlConnection(Globals.ConnectionString);
         await conn.ExecuteAsync($"update user_table set completed = {completed} where uid = {uid}");
     }
+
+    public async Task<UserEntity> Get(string? uid)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        return await conn.QueryFirstAsync<UserEntity>($"select * from user_table where uid = {uid}");
+    }
 }
