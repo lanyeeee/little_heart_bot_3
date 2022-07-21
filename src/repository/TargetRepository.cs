@@ -51,6 +51,12 @@ public class TargetRepository
         await conn.ExecuteAsync($"delete from target_table where uid = {uid}");
     }
 
+    public async Task DeleteByUidAndTargetUid(string? uid, string? targetUid)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        await conn.ExecuteAsync($"delete from target_table where uid = {uid} and target_uid = {targetUid}");
+    }
+
     public async Task<int> GetTargetNum(string? uid)
     {
         await using var conn = new MySqlConnection(Globals.ConnectionString);
