@@ -53,8 +53,11 @@ public class TargetRepository
 
     public async Task DeleteByUidAndTargetUid(string? uid, string? targetUid)
     {
+        string sql = "delete from target_table where uid = @Uid and target_uid = @TargetUid";
+        var parameters = new { Uid = uid, TargetUid = targetUid };
+
         await using var conn = new MySqlConnection(Globals.ConnectionString);
-        await conn.ExecuteAsync($"delete from target_table where uid = {uid} and target_uid = {targetUid}");
+        await conn.ExecuteAsync(sql, parameters);
     }
 
     public async Task<int> GetTargetNum(string? uid)
@@ -67,8 +70,9 @@ public class TargetRepository
     public async Task<bool> CheckExistByUidAndTargetUid(string uid, string targetUid)
     {
         await using var conn = new MySqlConnection(Globals.ConnectionString);
-        string sql = $"select * from target_table where uid = {uid} and target_uid = {targetUid}";
-        var result = await conn.QueryAsync<TargetEntity>(sql);
+        string sql = "select * from target_table where uid = @Uid and target_uid = @TargetUid";
+        var parameters = new { Uid = uid, TargetUid = targetUid };
+        var result = await conn.QueryAsync<TargetEntity>(sql, parameters);
         return result.ToList().Count != 0;
     }
 
@@ -76,10 +80,11 @@ public class TargetRepository
         string targetUid)
     {
         string sql =
-            $"update target_table set target_name = '{targetName}', room_id = {roomId} where uid = {uid} and target_uid = {targetUid}";
+            "update target_table set target_name = @TargetName, room_id = @RoomId where uid = @Uid and target_uid = @TargetUid";
+        var parameters = new { TargetName = targetName, RoomId = roomId, Uid = uid, TargetUid = targetUid };
 
         await using var conn = new MySqlConnection(Globals.ConnectionString);
-        await conn.ExecuteAsync(sql);
+        await conn.ExecuteAsync(sql, parameters);
     }
 
     public async Task Insert(TargetEntity targetEntity)
