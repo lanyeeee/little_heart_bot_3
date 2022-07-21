@@ -141,6 +141,12 @@ public class Bot
 
             await Globals.UserRepository.SetCompleted(0, uid);
         }
+        else if (command == "/target_delete")
+        {
+            if (parameter == null) return;
+            string targetUid = parameter;
+            await Globals.TargetRepository.DeleteByUidAndTargetUid(uid, targetUid);
+        }
         else if (command == "/delete")
         {
             await Globals.TargetRepository.DeleteByUid(uid);
