@@ -188,6 +188,13 @@ public class TargetEntity
             await Task.Delay(1000);
             goto Again;
         }
+#if DEBUG
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
+#endif
     }
 
     private async Task<int> GetExp(Logger logger)
@@ -270,7 +277,13 @@ public class TargetEntity
         Dictionary<string, string?> payload = await PostE(cookie, csrf, logger);
 
         JArray id = JArray.Parse(payload["id"]!);
-        if ((int?)id[0] == 0 || (int?)id[1] == 0) return;
+        if ((int?)id[0] == 0 || (int?)id[1] == 0)
+        {
+            Completed = 1;
+            await logger.Log($"uid {Uid} 在 {TargetName} 的任务完成，观看时长为0因为 {TargetName} 的直播间没有选择分区，无法观看");
+            await Globals.TargetRepository.SetCompleted(Completed, Id);
+            return;
+        }
 
         await HeartBeat(cookie, payload, logger);
     }
