@@ -7,9 +7,9 @@ namespace little_heart_bot_3.repository;
 
 public class BotRepository
 {
-    public BotEntity GetBot()
+    public BotEntity? GetBot()
     {
         using var conn = new MySqlConnection(Globals.ConnectionString);
-        return conn.QueryFirst<BotEntity>("select * from bot_table");
+        return conn.QueryFirstOrDefault<BotEntity?>("select * from bot_table");
     }
 }
