@@ -42,9 +42,38 @@ public class MessageRepository
         await conn.ExecuteAsync($"update message_table set completed = {completed} where id = {id}");
     }
 
+    public async Task SetCompletedByUidAndTargetUid(int completed, string uid, string targetUid)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        await conn.ExecuteAsync(
+            $"update message_table set completed = {completed} where uid = {uid} and target_uid = {targetUid}");
+    }
+
+    public async Task DeleteByUid(string? uid)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        await conn.ExecuteAsync($"delete from message_table where uid = {uid}");
+    }
+
     public async Task DeleteByUidAndTargetUid(string? uid, string? targetUid)
     {
         await using var conn = new MySqlConnection(Globals.ConnectionString);
         await conn.ExecuteAsync($"delete from message_table where uid = {uid} and target_uid = {targetUid}");
+    }
+
+    public async Task<bool> CheckExistByUidAndTargetUid(string uid, string targetUid)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        string sql = $"select * from message_table where uid = {uid} and target_uid = {targetUid}";
+        var result = await conn.QueryAsync<TargetEntity>(sql);
+        return result.ToList().Count != 0;
+    }
+
+    public async Task Insert(MessageEntity messageEntity)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        string sql =
+            "insert into message_table(uid, target_uid, target_name, room_id, content, code, response, completed) values(@Uid, @TargetUid, @TargetName, @RoomId, @Content, @Code, @response, @Completed)";
+        await conn.ExecuteAsync(sql, messageEntity);
     }
 }

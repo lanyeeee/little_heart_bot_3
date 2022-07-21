@@ -1,4 +1,5 @@
 using little_heart_bot_3.others;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace little_heart_bot_3.entity;
@@ -54,6 +55,82 @@ public class BotEntity
 
         sign += "】";
         return sign;
+    }
+
+    public async Task<JToken?> GetSessionList(Logger logger)
+    {
+        //普通的私信session
+        HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+        {
+            Method = HttpMethod.Get,
+            RequestUri = new Uri("https://api.vc.bilibili.com/session_svr/v1/session_svr/get_sessions?session_type=1"),
+            Headers = { { "Cookie", Cookie } },
+        });
+        await Task.Delay(1000);
+        JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
+        int? code = (int?)response["code"];
+
+        if (code != 0)
+        {
+            await logger.Log(response);
+            await logger.Log("获取普通的session_list失败");
+            throw new ApiException();
+        }
+
+        JArray? sessionList = (JArray?)response["data"]!["session_list"];
+
+        //被屏蔽的私信session
+        responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+        {
+            Method = HttpMethod.Get,
+            RequestUri = new Uri("https://api.vc.bilibili.com/session_svr/v1/session_svr/get_sessions?session_type=5"),
+            Headers = { { "Cookie", Cookie } },
+        });
+        response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
+        code = (int?)response["code"];
+
+        if (code != 0)
+        {
+            await logger.Log(response);
+            await logger.Log("获取被屏蔽的session_list失败");
+            throw new ApiException();
+        }
+
+        JToken? blockedList = response["data"]!["session_list"];
+
+        if (blockedList == null) return sessionList;
+
+        foreach (var blockedSession in blockedList)
+        {
+            sessionList?.Add(blockedSession);
+        }
+
+        return sessionList;
+    }
+
+    public async Task<IEnumerable<JToken>?> GetMessages(string? uid, Logger logger)
+    {
+        var uri = new Uri(
+            $"https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs?talker_id={uid}&session_type=1");
+
+        HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+        {
+            Method = HttpMethod.Get,
+            RequestUri = uri,
+            Headers = { { "Cookie", Cookie } },
+        });
+        await Task.Delay(1000);
+        JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
+        int? code = (int?)response["code"];
+
+        if (code != 0)
+        {
+            await logger.Log(response);
+            await logger.Log($"与 {uid} 的聊天记录获取失败");
+            throw new ApiException();
+        }
+
+        return response["data"]!["messages"]?.Reverse();
     }
 
     public async Task UpdateSign(Logger logger)

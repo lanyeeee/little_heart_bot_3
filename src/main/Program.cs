@@ -1,6 +1,7 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
 using Dapper;
+using little_heart_bot_3.others;
 
 namespace little_heart_bot_3.main;
 
