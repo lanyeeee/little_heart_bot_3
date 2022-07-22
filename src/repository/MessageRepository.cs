@@ -70,8 +70,11 @@ public class MessageRepository
 
     public async Task DeleteByUidAndTargetUid(string? uid, string? targetUid)
     {
+        string sql = "delete from message_table where uid = @Uid and target_uid = @TargetUid";
+        var parameters = new { Uid = uid, TargetUid = targetUid };
+
         await using var conn = new MySqlConnection(Globals.ConnectionString);
-        await conn.ExecuteAsync($"delete from message_table where uid = {uid} and target_uid = {targetUid}");
+        await conn.ExecuteAsync(sql, parameters);
     }
 
     public async Task<bool> CheckExistByUidAndTargetUid(string uid, string targetUid)
