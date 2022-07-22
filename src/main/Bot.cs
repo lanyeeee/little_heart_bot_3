@@ -14,8 +14,8 @@ public class Bot
     private bool _talking = true;
     private int _talkNum;
     private long _midnight; //今天0点的分钟时间戳
-    private BotEntity _botEntity;
-    private Dictionary<string, UserEntity> _users;
+    private readonly BotEntity _botEntity;
+    private Dictionary<string, UserEntity> _users = new();
 
 
     private Bot()
@@ -27,7 +27,7 @@ public class Bot
 
         _logger = new Logger("bot");
 
-        _botEntity = Globals.BotRepository.GetBot();
+        _botEntity = Globals.BotRepository.GetBot()!;
         Globals.AppStatus = _botEntity.AppStatus;
         Globals.SendStatus = _botEntity.SendStatus;
         Globals.ReceiveStatus = _botEntity.ReceiveStatus;

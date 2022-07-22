@@ -92,7 +92,7 @@ public class UserEntity
         {
             result += $"{message.TargetName}：\n";
             result += $"内容：{message.Content}\n";
-            string statusMsg = "";
+            string statusMsg;
             if (message.Response == null)
             {
                 statusMsg = "未发送\n";
