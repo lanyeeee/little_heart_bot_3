@@ -1,5 +1,3 @@
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text;
 using little_heart_bot_3.others;
 using Newtonsoft.Json;
@@ -15,21 +13,21 @@ public class TargetEntity
     public string? TargetName { get; set; }
     public string? RoomId { get; set; }
     public int Exp { get; set; }
+    public int WatchedSeconds { get; set; }
     public int Completed { get; set; }
 
-    private async Task<Dictionary<string, string?>> GetPayload(string? cookie, string? csrf, Logger logger)
+    private async Task<Dictionary<string, string?>> GetPayload(string? csrf, Logger logger)
     {
         var uri = new Uri($"https://api.live.bilibili.com/xlive/web-room/v1/index/getInfoByRoom?&room_id={RoomId}");
 
         HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
         {
             Method = HttpMethod.Get,
-            RequestUri = uri,
-            Headers = { { "Cookie", cookie } }
+            RequestUri = uri
         });
         JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
-
         int? code = (int?)response["code"];
+
         if (code != 0)
         {
             await logger.Log(response);
@@ -60,7 +58,7 @@ public class TargetEntity
 
     private async Task<Dictionary<string, string?>> PostE(string? cookie, string? csrf, Logger logger)
     {
-        Dictionary<string, string?> payload = await GetPayload(cookie, csrf, logger);
+        Dictionary<string, string?> payload = await GetPayload(csrf, logger);
 
         HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
         {
@@ -118,97 +116,171 @@ public class TargetEntity
         return (string?)response["s"];
     }
 
-    private async Task PostX(string? cookie, Dictionary<string, string?> payload, Logger logger)
+    private async Task<bool> PostX(string? cookie, Dictionary<string, string?> payload, Logger logger)
     {
-        string ts = DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString();
-        var xPayload = new Dictionary<string, string?>
+        Again:
+        try
         {
-            { "s", await GenerateS(payload, ts) },
-            { "id", payload["id"] },
-            { "device", payload["device"] },
-            { "ets", payload["ets"] },
-            { "benchmark", payload["secret_key"] },
-            { "time", payload["heartbeat_interval"] },
-            { "ts", ts },
-            { "ua", payload["ua"] },
-            { "csrf_token", payload["csrf"] },
-            { "csrf", payload["csrf"] },
-            { "visit_id", "" }
-        };
-        HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
-        {
-            Method = HttpMethod.Post,
-            RequestUri = new Uri("https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/X"),
-            Headers = { { "Cookie", cookie } },
-            Content = new FormUrlEncodedContent(xPayload)
-        });
-        JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
+            string ts = DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString();
+            var xPayload = new Dictionary<string, string?>
+            {
+                { "s", await GenerateS(payload, ts) },
+                { "id", payload["id"] },
+                { "device", payload["device"] },
+                { "ets", payload["ets"] },
+                { "benchmark", payload["secret_key"] },
+                { "time", payload["heartbeat_interval"] },
+                { "ts", ts },
+                { "ua", payload["ua"] },
+                { "csrf_token", payload["csrf"] },
+                { "csrf", payload["csrf"] },
+                { "visit_id", "" }
+            };
+            HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+            {
+                Method = HttpMethod.Post,
+                RequestUri = new Uri("https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/X"),
+                Headers = { { "Cookie", cookie } },
+                Content = new FormUrlEncodedContent(xPayload)
+            });
+            JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
 
-        int? code = (int?)response["code"];
-        if (code != 0)
+            int? code = (int?)response["code"];
+            if (code == -504)
+            {
+#if DEBUG
+                Console.WriteLine($"uid {Uid} 给 {TargetName} 发送X心跳包失败，服务器调用超时");
+#endif
+                await Task.Delay(1000);
+                goto Again;
+            }
+
+            if (code == 1012002)
+            {
+                await logger.Log(response);
+                await logger.Log($"uid {Uid} 给 {TargetName} 发送X心跳包失败");
+                return true;
+            }
+
+            if (code != 0)
+            {
+                await logger.Log(response);
+                await logger.Log($"uid {Uid} 给 {TargetName} 发送X心跳包失败");
+                throw new ApiException();
+            }
+
+            payload["ets"] = (string?)response["data"]!["timestamp"];
+            payload["secret_key"] = (string?)response["data"]!["secret_key"];
+            payload["heartbeat_interval"] = (string?)response["data"]!["heartbeat_interval"];
+            JArray id = JArray.Parse(payload["id"]!);
+            id[2] = (int?)id[2] + 1;
+            payload["id"] = id.ToString(Formatting.None);
+            return false;
+        }
+        catch (HttpRequestException)
         {
-            await logger.Log(response);
-            await logger.Log($"uid {Uid} 发送X心跳包失败");
-            throw new ApiException();
+#if DEBUG
+            Console.WriteLine($"uid {Uid} 给 {TargetName} 发送X心跳包失败，网络原因");
+#endif
+            await Task.Delay(1000);
+            goto Again;
+        }
+#if DEBUG
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
+#endif
+    }
+
+    private async Task<int> GetExp(Logger logger)
+    {
+        try
+        {
+            var uri = new Uri(
+                $"https://api.live.bilibili.com/fans_medal/v1/fans_medal/get_fans_medal_info?uid={Uid}&target_id={TargetUid}");
+
+            HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+            {
+                Method = HttpMethod.Get,
+                RequestUri = uri
+            });
+
+            JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
+            return (int)response["data"]!["today_feed"]!;
+        }
+        catch (ArgumentException)
+        {
+            await logger.Log($"uid {Uid} 未持有 {TargetName} 的粉丝牌");
+            await Globals.TargetRepository.Delete(Id);
+            await Globals.MessageRepository.DeleteByUidAndTargetUid(Uid, TargetUid);
+            return -1;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            return -1;
+        }
+    }
+
+    private async Task<bool> IsCompleted(Logger logger)
+    {
+        Exp = await GetExp(logger);
+        if (Exp == -1) return true;
+
+        await Globals.TargetRepository.SetExp(Exp, Id);
+#if DEBUG
+        Console.WriteLine($"uid {Uid}: {TargetName}:{Exp}");
+#endif
+        //经验达到1500或观看时长超过75分钟则判定为完成
+        if (Exp == 1500 || WatchedSeconds >= 75 * 60)
+        {
+            Completed = 1;
+            await logger.Log($"uid {Uid} 在 {TargetName} 的任务完成，观看时长 {WatchedSeconds / 60} 分钟，获得经验 {Exp}");
+            await Globals.TargetRepository.SetCompleted(Completed, Id);
+            return true;
         }
 
-        payload["ets"] = (string?)response["data"]!["timestamp"];
-        payload["secret_key"] = (string?)response["data"]!["secret_key"];
-        payload["heartbeat_interval"] = (string?)response["data"]!["heartbeat_interval"];
-        JArray id = JArray.Parse(payload["id"]!);
-        id[2] = (int?)id[2] + 1;
-        payload["id"] = id.ToString(Formatting.None);
-    }
-
-    private async Task<int> GetExp()
-    {
-        var uri = new Uri(
-            $"https://api.live.bilibili.com/fans_medal/v1/fans_medal/get_fans_medal_info?uid={Uid}&target_id={TargetUid}");
-
-        HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
-        {
-            Method = HttpMethod.Get,
-            RequestUri = uri
-        });
-
-        JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
-        return (int)response["data"]!["today_feed"]!;
-    }
-
-    private async Task<bool> IsCompleted()
-    {
-        Exp = await GetExp();
-        await Globals.TargetRepository.SetExp(Exp, Id);
-        Console.WriteLine($"{TargetName}:{Exp}");
-
-        if (Exp != 1500) return false;
-
-        Completed = 1;
-        await Globals.TargetRepository.SetCompleted(Completed, Id);
-        return true;
+        return false;
     }
 
     private async Task HeartBeat(string? cookie, Dictionary<string, string?> payload, Logger logger)
     {
-        await Task.Delay(int.Parse(payload["heartbeat_interval"]!) * 1000);
+        int interval = int.Parse(payload["heartbeat_interval"]!);
+
+        await Task.Delay(interval * 1000);
+
         while (true)
         {
-            await PostX(cookie, payload, logger);
+            //如果发送X心跳包失败，则返回
+            if (await PostX(cookie, payload, logger)) return;
 
-            int? seq = (int?)JArray.Parse(payload["id"]!)[2];
-            if (seq % 5 == 0 && await IsCompleted()) return;
+            interval = int.Parse(payload["heartbeat_interval"]!);
+            WatchedSeconds += interval;
+            await Globals.TargetRepository.SetWatchedSeconds(WatchedSeconds, Id);
 
-            await Task.Delay(int.Parse(payload["heartbeat_interval"]!) * 1000);
+            //每隔5分钟检查一次是否完成，完成则返回
+            if (WatchedSeconds % 300 == 0 && await IsCompleted(logger)) return;
+
+            await Task.Delay(interval * 1000);
         }
     }
 
     public async Task Start(string? cookie, string? csrf, Logger logger)
     {
-        if (await IsCompleted()) return;
+        if (await IsCompleted(logger)) return;
 
         Dictionary<string, string?> payload = await PostE(cookie, csrf, logger);
+
         JArray id = JArray.Parse(payload["id"]!);
-        if ((int?)id[0] == 0 || (int?)id[1] == 0) return;
+        if ((int?)id[0] == 0 || (int?)id[1] == 0)
+        {
+            Completed = 1;
+            await logger.Log($"uid {Uid} 在 {TargetName} 的任务完成，观看时长为0因为 {TargetName} 的直播间没有选择分区，无法观看");
+            await Globals.TargetRepository.SetCompleted(Completed, Id);
+            return;
+        }
 
         await HeartBeat(cookie, payload, logger);
     }

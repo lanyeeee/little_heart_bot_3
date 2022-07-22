@@ -2,7 +2,7 @@ namespace little_heart_bot_3.others;
 
 public class Logger
 {
-    //TextWriter是线程安全的
+    //TextWriter.Synchronized 创建的TextWriter是线程安全的
     private TextWriter _writer;
     private string _fileName;
     private readonly string _name;
@@ -14,7 +14,7 @@ public class Logger
         _fileName = _name + "_" + DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
 
         Directory.CreateDirectory("log");
-        _writer = File.AppendText("log/" + _fileName);
+        _writer = TextWriter.Synchronized(File.AppendText("log/" + _fileName));
     }
 
     public async Task Log(params object[] args)
