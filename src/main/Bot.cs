@@ -189,6 +189,18 @@ public class Bot
         }
         else if (command == "/message_set")
         {
+            if (parameter == null) return;
+
+            string[] pair = parameter.Split(" ", 2);
+            if (pair.Length != 2) return;
+
+            string targetUid = pair[0].Trim();
+            string content = pair[1].Trim();
+            if (!targetUid.IsNumeric() || content.Length > 20) return;
+
+            await Globals.MessageRepository.SetContentByUidAndTargetUid(content, uid, targetUid);
+            await Globals.MessageRepository.SetCompletedByUidAndTargetUid(0, uid, targetUid);
+            await Globals.MessageRepository.SetCodeAndResponseByUidAndTargetUid(0, null, uid, targetUid);
         }
     }
 
@@ -248,7 +260,6 @@ public class Bot
 
             int? timestamp = session["last_msg"]!.HasValues ? (int?)session["last_msg"]!["timestamp"] : 0;
             if (timestamp == null) continue;
-
 
             if (!_users.ContainsKey(uid)) //新用户
             {

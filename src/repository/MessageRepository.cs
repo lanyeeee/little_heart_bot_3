@@ -32,6 +32,17 @@ public class MessageRepository
     {
         string sql = "update message_table set code = @Code, response = @Response where id = @Id";
         var parameters = new { Code = code, Response = response, Id = id };
+
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        await conn.ExecuteAsync(sql, parameters);
+    }
+
+    public async Task SetCodeAndResponseByUidAndTargetUid(int? code, string? response, string? uid, string? targetUid)
+    {
+        string sql =
+            "update message_table set code = @Code, response = @Response where uid = @Uid and target_uid = @TargetUid";
+        var parameters = new { Code = code, Response = response, Uid = uid, TargetUid = targetUid };
+
         await using var conn = new MySqlConnection(Globals.ConnectionString);
         await conn.ExecuteAsync(sql, parameters);
     }
@@ -44,9 +55,10 @@ public class MessageRepository
 
     public async Task SetCompletedByUidAndTargetUid(int completed, string uid, string targetUid)
     {
-        await using var conn = new MySqlConnection(Globals.ConnectionString);
         string sql = "update message_table set completed = @Completed where uid = @Uid and target_uid = @TargetUid";
         var parameters = new { Completed = completed, Uid = uid, TargetUid = targetUid };
+
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
         await conn.ExecuteAsync(sql, parameters);
     }
 
@@ -78,5 +90,14 @@ public class MessageRepository
         string sql =
             "insert into message_table(uid, target_uid, target_name, room_id, content, code, response, completed) values(@Uid, @TargetUid, @TargetName, @RoomId, @Content, @Code, @response, @Completed)";
         await conn.ExecuteAsync(sql, messageEntity);
+    }
+
+    public async Task SetContentByUidAndTargetUid(string? content, string? uid, string? targetUid)
+    {
+        string sql = "update message_table set content = @Content where uid = @Uid and target_uid = @TargetUid";
+        var parameters = new { Content = content, Uid = uid, TargetUid = targetUid };
+
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        await conn.ExecuteAsync(sql, parameters);
     }
 }
