@@ -74,9 +74,21 @@ public class App
             try
             {
                 await VerifyCookies();
-                List<UserEntity> users = await Globals.UserRepository.GetUncompletedUsers(20);
+                List<UserEntity> users = await Globals.UserRepository.GetUncompletedUsers(30);
                 await SendMessage(users);
                 await WatchLive(users);
+                Globals.AppStatus = 0;
+            }
+            catch (ApiException)
+            {
+                Globals.AppStatus = -1;
+                int cd = 15;
+                while (cd != 0)
+                {
+                    await _logger.Log($"请求过于频繁，还需冷却 {cd} 分钟");
+                    await Task.Delay(cd * 60 * 1000);
+                    cd--;
+                }
             }
             catch (Exception e)
             {
