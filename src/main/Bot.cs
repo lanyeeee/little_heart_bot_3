@@ -187,6 +187,9 @@ public class Bot
                 await _logger.Log($"uid {uid} 提交的cookie有误");
             }
         }
+        else if (command == "/message_set")
+        {
+        }
     }
 
     private async Task HandleMessages(string uid, int lastTimestamp, IEnumerable<JToken>? messages)
@@ -246,7 +249,6 @@ public class Bot
             int? timestamp = session["last_msg"]!.HasValues ? (int?)session["last_msg"]!["timestamp"] : 0;
             if (timestamp == null) continue;
 
-            int readTimestamp = Int32.Parse(_users[uid].ReadTimestamp!);
 
             if (!_users.ContainsKey(uid)) //新用户
             {
@@ -254,17 +256,19 @@ public class Bot
                 var userEntity = new UserEntity
                 {
                     Uid = uid,
-                    ReadTimestamp = "0",
+                    Cookie = "",
+                    Csrf = "",
+                    ReadTimestamp = timestamp.ToString(),
                     ConfigTimestamp = "0",
                     ConfigNum = 0
                 };
                 _users.Add(uid, userEntity);
                 await Globals.UserRepository.Insert(userEntity);
-
                 await HandleMessages(uid, 0, messages);
             }
-            else if (timestamp > readTimestamp) //发新消息的用户
+            else if (timestamp > Int32.Parse(_users[uid].ReadTimestamp!)) //发新消息的用户
             {
+                int readTimestamp = Int32.Parse(_users[uid].ReadTimestamp!);
                 IEnumerable<JToken>? messages = await _botEntity.GetMessages(uid, _logger);
                 await Globals.UserRepository.SetReadTimestamp(timestamp.ToString()!, uid);
                 await HandleMessages(uid, readTimestamp, messages);
