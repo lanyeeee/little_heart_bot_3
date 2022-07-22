@@ -410,6 +410,7 @@ public class Bot
                 await CheckNewDay();
                 await HandleIncomingMessage();
                 Globals.ReceiveStatus = 0;
+                if (_talking) Globals.SendStatus = 0;
             }
             catch (ApiException)
             {

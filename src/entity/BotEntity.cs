@@ -19,11 +19,11 @@ public class BotEntity
         string sign = "给你【";
         if (Globals.AppStatus == 0)
         {
-            sign += "弹幕、点赞、分享正常";
+            sign += "弹幕、点赞、观看直播正常";
         }
         else if (Globals.AppStatus == -1)
         {
-            sign += "弹幕、点赞、分享正常冷却中";
+            sign += "弹幕、点赞、观看直播冷却中";
         }
 
         sign += "，";
@@ -59,53 +59,64 @@ public class BotEntity
 
     public async Task<JToken?> GetSessionList(Logger logger)
     {
-        //普通的私信session
-        HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+        Again:
+        try
         {
-            Method = HttpMethod.Get,
-            RequestUri = new Uri("https://api.vc.bilibili.com/session_svr/v1/session_svr/get_sessions?session_type=1"),
-            Headers = { { "Cookie", Cookie } },
-        });
-        await Task.Delay(1000);
-        JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
-        int? code = (int?)response["code"];
+            //普通的私信session
+            HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+            {
+                Method = HttpMethod.Get,
+                RequestUri =
+                    new Uri("https://api.vc.bilibili.com/session_svr/v1/session_svr/get_sessions?session_type=1"),
+                Headers = { { "Cookie", Cookie } },
+            });
+            await Task.Delay(1000);
+            JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
+            int? code = (int?)response["code"];
 
-        if (code != 0)
-        {
-            await logger.Log(response);
-            await logger.Log("获取普通的session_list失败");
-            throw new ApiException();
+            if (code != 0)
+            {
+                await logger.Log(response);
+                await logger.Log("获取普通的session_list失败");
+                throw new ApiException();
+            }
+
+            JArray? sessionList = (JArray?)response["data"]!["session_list"];
+
+            //被屏蔽的私信session
+            responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+            {
+                Method = HttpMethod.Get,
+                RequestUri =
+                    new Uri("https://api.vc.bilibili.com/session_svr/v1/session_svr/get_sessions?session_type=5"),
+                Headers = { { "Cookie", Cookie } },
+            });
+            response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
+            code = (int?)response["code"];
+
+            if (code != 0)
+            {
+                await logger.Log(response);
+                await logger.Log("获取被屏蔽的session_list失败");
+                throw new ApiException();
+            }
+
+            JToken? blockedList = response["data"]!["session_list"];
+
+            if (blockedList == null) return sessionList;
+
+            foreach (var blockedSession in blockedList)
+            {
+                sessionList?.Add(blockedSession);
+            }
+
+            return sessionList;
         }
-
-        JArray? sessionList = (JArray?)response["data"]!["session_list"];
-
-        //被屏蔽的私信session
-        responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+        catch (HttpRequestException)
         {
-            Method = HttpMethod.Get,
-            RequestUri = new Uri("https://api.vc.bilibili.com/session_svr/v1/session_svr/get_sessions?session_type=5"),
-            Headers = { { "Cookie", Cookie } },
-        });
-        response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
-        code = (int?)response["code"];
-
-        if (code != 0)
-        {
-            await logger.Log(response);
-            await logger.Log("获取被屏蔽的session_list失败");
-            throw new ApiException();
+            await Task.Delay(1000);
+            goto Again;
         }
-
-        JToken? blockedList = response["data"]!["session_list"];
-
-        if (blockedList == null) return sessionList;
-
-        foreach (var blockedSession in blockedList)
-        {
-            sessionList?.Add(blockedSession);
-        }
-
-        return sessionList;
     }
 
     public async Task<IEnumerable<JToken>?> GetMessages(string? uid, Logger logger)
