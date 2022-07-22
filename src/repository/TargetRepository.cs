@@ -67,7 +67,7 @@ public class TargetRepository
         return result.ToList().Count;
     }
 
-    public async Task<bool> CheckExistByUidAndTargetUid(string uid, string targetUid)
+    public async Task<bool> CheckExistByUidAndTargetUid(string? uid, string? targetUid)
     {
         await using var conn = new MySqlConnection(Globals.ConnectionString);
         string sql = "select * from target_table where uid = @Uid and target_uid = @TargetUid";
@@ -93,5 +93,13 @@ public class TargetRepository
         string sql =
             "insert into target_table(uid, target_uid, target_name, room_id, exp, watched_seconds, completed) values(@Uid, @TargetUid, @TargetName, @RoomId, @Exp, @WatchedSeconds, @Completed)";
         await conn.ExecuteAsync(sql, targetEntity);
+    }
+
+    public async Task<List<TargetEntity>> GetTargetsByUid(string? uid)
+    {
+        string sql = $"select * from target_table where uid = {uid}";
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        var result = await conn.QueryAsync<TargetEntity>(sql);
+        return result.ToList();
     }
 }
