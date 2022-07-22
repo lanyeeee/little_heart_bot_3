@@ -178,4 +178,41 @@ public class BotEntity
             }
         }
     }
+
+    public async Task<bool> SendMessage(string content, string targetUid, Logger logger)
+    {
+        var payload = new Dictionary<string, string?>
+        {
+            { "msg[sender_uid]", Uid },
+            { "msg[receiver_id]", targetUid },
+            { "msg[receiver_type]", "1" },
+            { "msg[msg_type]", "1" },
+            { "msg[dev_id]", DevId },
+            { "msg[timestamp]", DateTimeOffset.Now.ToUnixTimeSeconds().ToString() },
+            { "msg[content]", new JObject { { "content", content } }.ToString(Formatting.None) },
+            { "csrf", Csrf }
+        };
+        HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+        {
+            Method = HttpMethod.Post,
+            RequestUri = new Uri("https://api.vc.bilibili.com/web_im/v1/web_im/send_msg"),
+            Headers = { { "Cookie", Cookie } },
+            Content = new FormUrlEncodedContent(payload)
+        });
+        await Task.Delay(1000);
+        JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
+        int? code = (int?)response["code"];
+
+        if (code != 0)
+        {
+            await logger.Log(response);
+            await logger.Log("私信发送失败");
+
+            if (code == 21024) return true;
+
+            return false;
+        }
+
+        return true;
+    }
 }

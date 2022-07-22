@@ -25,8 +25,8 @@ public class UserEntity
 
     public async Task WatchLive(Logger logger)
     {
-        UserEntity thisUser = await Globals.UserRepository.Get(Uid);
-        if (thisUser.CookieStatus != 1) return;
+        UserEntity? thisUser = await Globals.UserRepository.Get(Uid);
+        if (thisUser == null || thisUser.CookieStatus != 1) return;
 
         List<TargetEntity> targets = await Globals.TargetRepository.GetUncompletedTargetsByUid(Uid);
 #if DEBUG
@@ -41,5 +41,53 @@ public class UserEntity
 
         Completed = 1;
         await Globals.UserRepository.SetCompleted(Completed, Uid);
+    }
+
+    public async Task<string?> GetConfigString(Logger logger)
+    {
+        long nowTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds();
+        if (ConfigNum >= 10 || nowTimestamp - Int64.Parse(ConfigTimestamp!) < 60) return null;
+
+        List<TargetEntity> targets = await Globals.TargetRepository.GetTargetsByUid(Uid);
+        List<MessageEntity> messages = await Globals.MessageRepository.GetMessagesByUid(Uid);
+
+        string result = "";
+        result += $"目标({targets.Count}/10)：\n";
+        targets.ForEach(target => result += $"{target.TargetName}\n");
+
+        result += "\n";
+        result += $"弹幕({messages.Count}/30)：\n";
+        messages.ForEach(message => result += $"{message.TargetName}\n");
+
+        result += "\n";
+        if (string.IsNullOrEmpty(Cookie))
+        {
+            result += "cookie：无\n";
+        }
+        else
+        {
+            string cookieMsg = "";
+            if (CookieStatus == -1) cookieMsg = "错误或已过期";
+            else if (CookieStatus == 0) cookieMsg = "还未被使用";
+            else if (CookieStatus == 1) cookieMsg = "直到上次使用还有效";
+            result += $"cookie：有，{cookieMsg}\n";
+        }
+
+        string targetMsg = Completed == 1 ? "是" : "否";
+        result += $"今日任务是否已完成：{targetMsg}\n";
+        result += $"已用查询次数({ConfigNum + 1}/10)\n";
+        return result;
+    }
+
+    public async Task<string?> GetMessageConfigString(Logger logger)
+    {
+        List<MessageEntity> messages = await Globals.MessageRepository.GetMessagesByUid(Uid);
+        return null;
+    }
+
+    public async Task<string?> GetTargetConfigString(Logger logger)
+    {
+        List<TargetEntity> targets = await Globals.TargetRepository.GetTargetsByUid(Uid);
+        return null;
     }
 }
