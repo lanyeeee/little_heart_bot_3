@@ -144,6 +144,13 @@ public class Bot
         else if (command == "/target_delete")
         {
             if (parameter == null) return;
+
+            if (parameter == "all")
+            {
+                await Globals.TargetRepository.DeleteByUid(uid);
+                return;
+            }
+
             string targetUid = parameter;
             if (!targetUid.IsNumeric()) return;
             await Globals.TargetRepository.DeleteByUidAndTargetUid(uid, targetUid);
@@ -205,6 +212,26 @@ public class Bot
         else if (command == "/message_delete")
         {
             if (parameter == null) return;
+
+            if (parameter == "all")
+            {
+                List<TargetEntity> targets = await Globals.TargetRepository.GetTargetsByUid(uid);
+                foreach (var target in targets)
+                {
+                    bool exist = await Globals.TargetRepository.CheckExistByUidAndTargetUid(uid, target.Uid);
+                    if (exist)
+                    {
+                        await Globals.MessageRepository.SetContentByUidAndTargetUid("飘过~", uid, target.Uid);
+                        await Globals.MessageRepository.SetCodeAndResponseByUidAndTargetUid(0, null, uid, target.Uid);
+                    }
+                    else
+                    {
+                        await Globals.MessageRepository.DeleteByUidAndTargetUid(uid, target.Uid);
+                    }
+                }
+
+                return;
+            }
 
             string targetUid = parameter;
             if (!targetUid.IsNumeric()) return;
