@@ -38,6 +38,8 @@ public class Bot
         if (DateTimeOffset.Now.ToUnixTimeSeconds() - _midnight < 24 * 60 * 60 + 3 * 60) return;
 
         //新的一天要把一些数据重置
+        _talking = true;
+        _talkNum = 0;
         DateTimeOffset today = DateTime.Today;
         _midnight = today.ToUnixTimeSeconds();
 
