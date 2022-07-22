@@ -221,11 +221,12 @@ public class Bot
                 List<TargetEntity> targets = await Globals.TargetRepository.GetTargetsByUid(uid);
                 foreach (var target in targets)
                 {
-                    bool exist = await Globals.TargetRepository.CheckExistByUidAndTargetUid(uid, target.Uid);
+                    bool exist = await Globals.TargetRepository.CheckExistByUidAndTargetUid(uid, target.TargetUid);
                     if (exist)
                     {
-                        await Globals.MessageRepository.SetContentByUidAndTargetUid("飘过~", uid, target.Uid);
-                        await Globals.MessageRepository.SetCodeAndResponseByUidAndTargetUid(0, null, uid, target.Uid);
+                        await Globals.MessageRepository.SetContentByUidAndTargetUid("飘过~", uid, target.TargetUid);
+                        await Globals.MessageRepository.SetCodeAndResponseByUidAndTargetUid(0, null, uid,
+                            target.TargetUid);
                     }
                     else
                     {
