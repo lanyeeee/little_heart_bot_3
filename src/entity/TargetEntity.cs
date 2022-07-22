@@ -16,7 +16,7 @@ public class TargetEntity
     public int WatchedSeconds { get; set; }
     public int Completed { get; set; }
 
-    private async Task<Dictionary<string, string?>> GetPayload(string? cookie, string? csrf, Logger logger)
+    private async Task<Dictionary<string, string?>> GetPayload(string? csrf, Logger logger)
     {
         var uri = new Uri($"https://api.live.bilibili.com/xlive/web-room/v1/index/getInfoByRoom?&room_id={RoomId}");
 
@@ -58,7 +58,7 @@ public class TargetEntity
 
     private async Task<Dictionary<string, string?>> PostE(string? cookie, string? csrf, Logger logger)
     {
-        Dictionary<string, string?> payload = await GetPayload(cookie, csrf, logger);
+        Dictionary<string, string?> payload = await GetPayload(csrf, logger);
 
         HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
         {
