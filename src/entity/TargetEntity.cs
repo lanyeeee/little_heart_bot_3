@@ -197,6 +197,7 @@ public class TargetEntity
 
     private async Task<int> GetExp(Logger logger)
     {
+        Again:
         try
         {
             var uri = new Uri(
@@ -218,10 +219,10 @@ public class TargetEntity
             await Globals.MessageRepository.DeleteByUidAndTargetUid(Uid, TargetUid);
             return -1;
         }
-        catch (Exception e)
+        catch (HttpRequestException)
         {
-            Console.WriteLine(e);
-            return -1;
+            await Task.Delay(1000);
+            goto Again;
         }
     }
 

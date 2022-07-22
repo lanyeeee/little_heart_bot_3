@@ -56,14 +56,27 @@ public class App
     private async Task SendMessage(List<UserEntity> users)
     {
         var tasks = new List<Task>();
-        users.ForEach(user => tasks.Add(user.SendMessage(_logger)));
+
+        foreach (var user in users)
+        {
+            tasks.Add(user.SendMessage(_logger));
+            await Task.Delay(100);
+        }
+
+        // users.ForEach(user => tasks.Add(user.SendMessage(_logger)));
         await Task.WhenAll(tasks);
     }
 
     private async Task WatchLive(List<UserEntity> users)
     {
         var tasks = new List<Task>();
-        users.ForEach(user => tasks.Add(user.WatchLive(_logger)));
+        foreach (var user in users)
+        {
+            tasks.Add(user.WatchLive(_logger));
+            await Task.Delay(2000);
+        }
+
+        // users.ForEach(user => tasks.Add(user.WatchLive(_logger)));
         await Task.WhenAll(tasks);
     }
 
