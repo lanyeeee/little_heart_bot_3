@@ -105,6 +105,8 @@ public class UserEntity
 
             result += $"状态：{statusMsg}\n";
         });
+
+        result += $"已用查询次数({ConfigNum + 1}/10)\n";
         return result;
     }
 
@@ -124,6 +126,8 @@ public class UserEntity
             result += $"观看时长：{target.WatchedSeconds / 60}分钟\n";
             result += $"经验：{target.Exp}\n\n";
         });
+
+        result += $"已用查询次数({ConfigNum + 1}/10)\n";
         return result;
     }
 }
