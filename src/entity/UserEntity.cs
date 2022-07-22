@@ -1,4 +1,5 @@
 using little_heart_bot_3.others;
+using Newtonsoft.Json.Linq;
 
 namespace little_heart_bot_3.entity;
 
@@ -81,13 +82,48 @@ public class UserEntity
 
     public async Task<string?> GetMessageConfigString(Logger logger)
     {
+        long nowTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds();
+        if (ConfigNum >= 10 || nowTimestamp - Int64.Parse(ConfigTimestamp!) < 60) return null;
+
         List<MessageEntity> messages = await Globals.MessageRepository.GetMessagesByUid(Uid);
-        return null;
+        string result = "";
+        result += $"弹幕({messages.Count}/30)：\n\n";
+        messages.ForEach(message =>
+        {
+            result += $"{message.TargetName}：\n";
+            result += $"内容：{message.Content}\n";
+            string statusMsg = "";
+            if (message.Response == null)
+            {
+                statusMsg = "未发送\n";
+            }
+            else
+            {
+                JObject response = JObject.Parse(message.Response);
+                statusMsg = $"已尝试发送，响应代码:{message.Code}，响应信息:{(string?)response["message"]}\n";
+            }
+
+            result += $"状态：{statusMsg}\n";
+        });
+        return result;
     }
 
     public async Task<string?> GetTargetConfigString(Logger logger)
     {
+        long nowTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds();
+        if (ConfigNum >= 10 || nowTimestamp - Int64.Parse(ConfigTimestamp!) < 60) return null;
+
         List<TargetEntity> targets = await Globals.TargetRepository.GetTargetsByUid(Uid);
-        return null;
+        string result = "";
+        result += $"目标({targets.Count}/10)：\n\n";
+        targets.ForEach(target =>
+        {
+            result += $"{target.TargetName}：\n";
+            string completedMsg = target.Completed == 1 ? "是" : "否";
+            result += $"是否已结束：{completedMsg}\n";
+            result += $"观看时长：{target.WatchedSeconds / 60}分钟\n";
+            result += $"经验：{target.Exp}\n\n";
+        });
+        return result;
     }
 }
