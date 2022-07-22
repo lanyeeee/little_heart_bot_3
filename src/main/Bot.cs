@@ -202,6 +202,24 @@ public class Bot
             await Globals.MessageRepository.SetCompletedByUidAndTargetUid(0, uid, targetUid);
             await Globals.MessageRepository.SetCodeAndResponseByUidAndTargetUid(0, null, uid, targetUid);
         }
+        else if (command == "/message_delete")
+        {
+            if (parameter == null) return;
+
+            string targetUid = parameter;
+            if (!targetUid.IsNumeric()) return;
+
+            bool targetExist = await Globals.TargetRepository.CheckExistByUidAndTargetUid(uid, targetUid);
+            if (targetExist)
+            {
+                await Globals.MessageRepository.SetContentByUidAndTargetUid("飘过~", uid, targetUid);
+                await Globals.MessageRepository.SetCodeAndResponseByUidAndTargetUid(0, null, uid, targetUid);
+            }
+            else
+            {
+                await Globals.MessageRepository.DeleteByUidAndTargetUid(uid, targetUid);
+            }
+        }
     }
 
     private async Task HandleMessages(string uid, int lastTimestamp, IEnumerable<JToken>? messages)
