@@ -103,4 +103,11 @@ public class MessageRepository
         await using var conn = new MySqlConnection(Globals.ConnectionString);
         await conn.ExecuteAsync(sql, parameters);
     }
+
+    public async Task<int> GetMessageNum(string? uid)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        var result = await conn.QueryAsync<TargetEntity>($"select * from message_table where uid = {uid}");
+        return result.ToList().Count;
+    }
 }

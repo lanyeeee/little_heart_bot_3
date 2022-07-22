@@ -155,45 +155,6 @@ public class Bot
             if (!targetUid.IsNumeric()) return;
             await Globals.TargetRepository.DeleteByUidAndTargetUid(uid, targetUid);
         }
-        else if (command == "/delete")
-        {
-            await Globals.TargetRepository.DeleteByUid(uid);
-            await Globals.MessageRepository.DeleteByUid(uid);
-
-            var userEntity = await Globals.UserRepository.Get(uid);
-            if (userEntity == null) return;
-
-            userEntity.Cookie = "";
-            userEntity.Csrf = "";
-            userEntity.Completed = 0;
-            userEntity.CookieStatus = -1;
-
-            await Globals.UserRepository.Update(userEntity);
-            _users[uid] = userEntity;
-        }
-        else if (command == "/cookie_commit")
-        {
-            try
-            {
-                if (parameter == null) return;
-
-                var userEntity = await Globals.UserRepository.Get(uid);
-                if (userEntity == null) return;
-
-                userEntity.Cookie = parameter.Replace("\n", "");
-                userEntity.Csrf = GetCsrf(userEntity.Cookie);
-                userEntity.CookieStatus = 0;
-
-                await Globals.UserRepository.Update(userEntity);
-            }
-            catch (Exception e)
-            {
-#if DEBUG
-                Console.WriteLine(e);
-#endif
-                await _logger.Log($"uid {uid} 提交的cookie有误");
-            }
-        }
         else if (command == "/message_set")
         {
             if (parameter == null) return;
@@ -203,7 +164,8 @@ public class Bot
 
             string targetUid = pair[0].Trim();
             string content = pair[1].Trim();
-            if (!targetUid.IsNumeric() || content.Length > 20) return;
+            int messageNum = await Globals.MessageRepository.GetMessageNum(uid);
+            if (!targetUid.IsNumeric() || content.Length > 20 || messageNum > 50) return;
 
             bool exist = await Globals.MessageRepository.CheckExistByUidAndTargetUid(uid, targetUid);
             if (exist)
@@ -270,6 +232,45 @@ public class Bot
             {
                 await Globals.MessageRepository.DeleteByUidAndTargetUid(uid, targetUid);
             }
+        }
+        else if (command == "/cookie_commit")
+        {
+            try
+            {
+                if (parameter == null) return;
+
+                var userEntity = await Globals.UserRepository.Get(uid);
+                if (userEntity == null) return;
+
+                userEntity.Cookie = parameter.Replace("\n", "");
+                userEntity.Csrf = GetCsrf(userEntity.Cookie);
+                userEntity.CookieStatus = 0;
+
+                await Globals.UserRepository.Update(userEntity);
+            }
+            catch (Exception e)
+            {
+#if DEBUG
+                Console.WriteLine(e);
+#endif
+                await _logger.Log($"uid {uid} 提交的cookie有误");
+            }
+        }
+        else if (command == "/delete")
+        {
+            await Globals.TargetRepository.DeleteByUid(uid);
+            await Globals.MessageRepository.DeleteByUid(uid);
+
+            var userEntity = await Globals.UserRepository.Get(uid);
+            if (userEntity == null) return;
+
+            userEntity.Cookie = "";
+            userEntity.Csrf = "";
+            userEntity.Completed = 0;
+            userEntity.CookieStatus = -1;
+
+            await Globals.UserRepository.Update(userEntity);
+            _users[uid] = userEntity;
         }
     }
 
