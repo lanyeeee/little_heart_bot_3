@@ -85,6 +85,21 @@ public class Bot
         return cookie.Substring(cookie.IndexOf("bili_jct=", StringComparison.Ordinal) + 9, 32);
     }
 
+    private async Task SendMessage(string content, string uid)
+    {
+        _talking = await _botEntity.SendMessage(content, uid, _logger);
+        if (_talking == false)
+        {
+            await _logger.Log($"今日私信发送数量已达上限，共发送了 {_talkNum} 条私信");
+            return;
+        }
+
+        _talkNum++;
+        _users[uid].ConfigTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds().ToString();
+        _users[uid].ConfigNum++;
+        await Globals.UserRepository.Update(_users[uid]);
+    }
+
     private async Task HandleCommand(string uid, string command, string? parameter)
     {
         if (command == "/target_set")
@@ -263,17 +278,21 @@ public class Bot
             string? content = await _users[uid].GetConfigString(_logger);
             if (content == null) return;
 
-            _talking = await _botEntity.SendMessage(content, uid, _logger);
-            if (_talking == false)
-            {
-                await _logger.Log($"今日私信发送数量已达上限，共发送了 {_talkNum} 条私信");
-                return;
-            }
+            await SendMessage(content, uid);
+        }
+        else if (command == "/message_config")
+        {
+            string? content = await _users[uid].GetMessageConfigString(_logger);
+            if (content == null) return;
 
-            _talkNum++;
-            _users[uid].ConfigTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds().ToString();
-            _users[uid].ConfigNum++;
-            await Globals.UserRepository.Update(_users[uid]);
+            await SendMessage(content, uid);
+        }
+        else if (command == "/target_config")
+        {
+            string? content = await _users[uid].GetTargetConfigString(_logger);
+            if (content == null) return;
+
+            await SendMessage(content, uid);
         }
         else if (command == "/delete")
         {
