@@ -265,13 +265,18 @@ public class Bot
 
                 await Globals.UserRepository.Update(userEntity);
             }
+#if DEBUG
             catch (Exception e)
             {
-#if DEBUG
                 Console.WriteLine(e);
-#endif
                 await _logger.Log($"uid {uid} 提交的cookie有误");
             }
+#else
+            catch 
+            {
+                await _logger.Log($"uid {uid} 提交的cookie有误");
+            }
+#endif
         }
         else if (command == "/config")
         {
