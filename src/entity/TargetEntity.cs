@@ -188,7 +188,8 @@ public class TargetEntity
 #if DEBUG
         catch (Exception e)
         {
-            Console.WriteLine(e);
+            await logger.Log($"uid {Uid} 在给 {TargetName} 发X心跳包时发生异常");
+            await logger.Log(e);
             throw;
         }
 #endif
