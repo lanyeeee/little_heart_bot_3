@@ -68,7 +68,7 @@ public class Bot
         JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
         int? code = (int?)response["code"];
 
-        if (code == -400) return null;
+        if (code == -400 || code == -404) return null;
 
         if (code != 0)
         {
@@ -409,7 +409,10 @@ public class Bot
             {
                 await CheckNewDay();
                 await HandleIncomingMessage();
+
                 Globals.ReceiveStatus = 0;
+                if (_talking) Globals.SendStatus = 0;
+                else Globals.SendStatus = -2;
             }
             catch (ApiException)
             {

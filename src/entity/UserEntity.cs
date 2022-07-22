@@ -30,9 +30,12 @@ public class UserEntity
         if (thisUser == null || thisUser.CookieStatus != 1) return;
 
         List<TargetEntity> targets = await Globals.TargetRepository.GetUncompletedTargetsByUid(Uid);
+
 #if DEBUG
         Console.WriteLine($"uid {Uid}: targets.Count={targets.Count}");
 #endif
+        await logger.Log($"uid {Uid} 正在观看直播，共有 {targets.Count} 个目标");
+
         var tasks = new List<Task>();
         targets.ForEach(target => tasks.Add(target.Start(Cookie, Csrf, logger)));
         await Task.WhenAll(tasks);
