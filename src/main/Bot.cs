@@ -165,7 +165,7 @@ public class Bot
             string targetUid = pair[0].Trim();
             string content = pair[1].Trim();
             int messageNum = await Globals.MessageRepository.GetMessageNum(uid);
-            if (!targetUid.IsNumeric() || content.Length > 20 || messageNum > 50) return;
+            if (!targetUid.IsNumeric() || content.Length > 20 || messageNum > 30) return;
 
             bool exist = await Globals.MessageRepository.CheckExistByUidAndTargetUid(uid, targetUid);
             if (exist)
@@ -255,6 +255,23 @@ public class Bot
 #endif
                 await _logger.Log($"uid {uid} 提交的cookie有误");
             }
+        }
+        else if (command == "/config")
+        {
+            string? content = await _users[uid].GetConfigString(_logger);
+            if (content == null) return;
+
+            _talking = await _botEntity.SendMessage(content, uid, _logger);
+            if (_talking == false)
+            {
+                await _logger.Log($"今日私信发送数量已达上限，共发送了 {_talkNum} 条私信");
+                return;
+            }
+
+            _talkNum++;
+            _users[uid].ConfigTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds().ToString();
+            _users[uid].ConfigNum++;
+            await Globals.UserRepository.Update(_users[uid]);
         }
         else if (command == "/delete")
         {
