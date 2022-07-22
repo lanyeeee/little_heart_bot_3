@@ -46,9 +46,44 @@ public class UserRepository
         await conn.ExecuteAsync($"update user_table set completed = {completed} where uid = {uid}");
     }
 
-    public async Task<UserEntity> Get(string? uid)
+    public async Task<UserEntity?> Get(string? uid)
     {
         await using var conn = new MySqlConnection(Globals.ConnectionString);
-        return await conn.QueryFirstAsync<UserEntity>($"select * from user_table where uid = {uid}");
+        return await conn.QueryFirstOrDefaultAsync<UserEntity?>($"select * from user_table where uid = {uid}");
+    }
+
+    public async Task<List<UserEntity>> GetAll()
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        var result = await conn.QueryAsync<UserEntity>("select * from user_table where 1");
+        return result.ToList();
+    }
+
+    public async Task SetReadTimestamp(string readTimestamp, string uid)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        await conn.ExecuteAsync($"update user_table set read_timestamp = {readTimestamp} where uid = {uid}");
+    }
+
+    public async Task Insert(UserEntity userEntity)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        string sql =
+            "insert into user_table(uid, cookie, csrf, completed, cookie_status, config_num, read_timestamp, config_timestamp) values(@Uid, @Cookie, @Csrf, @Completed, @CookieStatus, @ConfigNum, @ReadTimestamp, @ConfigTimestamp)";
+        await conn.ExecuteAsync(sql, userEntity);
+    }
+
+    public async Task Delete(string? uid)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        await conn.ExecuteAsync($"delete from user_table where uid = {uid}");
+    }
+
+    public async Task Update(UserEntity userEntity)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        string sql =
+            "update user_table set cookie = @Cookie, csrf = @Csrf, completed = @Completed, cookie_status = @CookieStatus, config_num = @ConfigNum, read_timestamp = @ReadTimestamp, config_timestamp = @ConfigTimestamp where uid = @Uid";
+        await conn.ExecuteAsync(sql, userEntity);
     }
 }

@@ -74,12 +74,14 @@ public class App
             try
             {
                 await VerifyCookies();
-                List<UserEntity> users = await Globals.UserRepository.GetUncompletedUsers(20);
+                List<UserEntity> users = await Globals.UserRepository.GetUncompletedUsers(30);
                 await SendMessage(users);
                 await WatchLive(users);
+                Globals.AppStatus = 0;
             }
             catch (ApiException)
             {
+                Globals.AppStatus = -1;
                 int cd = 15;
                 while (cd != 0)
                 {

@@ -1,6 +1,5 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
-using System.Net;
 using Dapper;
 
 namespace little_heart_bot_3.main;
@@ -24,5 +23,6 @@ public static class Program
 
     private static async Task Test()
     {
+        await Task.Delay(1);
     }
 }
