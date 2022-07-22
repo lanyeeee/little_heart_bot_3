@@ -81,6 +81,7 @@ public class MessageEntity
         if (Completed == 1) return;
 
         await ThumbsUp(cookie, csrf, logger);
+        await Task.Delay(1000);
 
         if (Code != 0) return;
 
