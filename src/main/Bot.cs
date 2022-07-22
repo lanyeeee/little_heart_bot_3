@@ -205,9 +205,33 @@ public class Bot
             string content = pair[1].Trim();
             if (!targetUid.IsNumeric() || content.Length > 20) return;
 
-            await Globals.MessageRepository.SetContentByUidAndTargetUid(content, uid, targetUid);
-            await Globals.MessageRepository.SetCompletedByUidAndTargetUid(0, uid, targetUid);
-            await Globals.MessageRepository.SetCodeAndResponseByUidAndTargetUid(0, null, uid, targetUid);
+            bool exist = await Globals.MessageRepository.CheckExistByUidAndTargetUid(uid, targetUid);
+            if (exist)
+            {
+                await Globals.MessageRepository.SetContentByUidAndTargetUid(content, uid, targetUid);
+                await Globals.MessageRepository.SetCompletedByUidAndTargetUid(0, uid, targetUid);
+                await Globals.MessageRepository.SetCodeAndResponseByUidAndTargetUid(0, null, uid, targetUid);
+            }
+            else
+            {
+                JToken? data = await GetRoomData(uid, targetUid);
+                if (data == null) return;
+
+                string? targetName = (string?)data["name"];
+                string? roomId = (string?)data["live_room"]!["roomid"];
+
+                var messageEntity = new MessageEntity
+                {
+                    Uid = uid,
+                    TargetUid = targetUid,
+                    TargetName = targetName,
+                    RoomId = roomId,
+                    Content = content,
+                    Code = 0
+                };
+
+                await Globals.MessageRepository.Insert(messageEntity);
+            }
         }
         else if (command == "/message_delete")
         {
