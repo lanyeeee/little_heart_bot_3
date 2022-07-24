@@ -422,7 +422,7 @@ public class Bot
                 while (cd != 0)
                 {
                     await _logger.Log($"请求过于频繁，还需冷却 {cd} 分钟");
-                    await Task.Delay(cd * 60 * 1000);
+                    await Task.Delay(60 * 1000);
                     cd--;
                 }
             }
