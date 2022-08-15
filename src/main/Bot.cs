@@ -108,7 +108,7 @@ public class Bot
             string targetUid = parameter;
             int targetNum = await Globals.TargetRepository.GetTargetNum(uid);
 
-            if (!targetUid.IsNumeric() || targetNum > 10) return;
+            if (!targetUid.IsNumeric() || targetNum > 50) return;
 
             JToken? data = await GetRoomData(uid, targetUid);
             if (data == null) return;
@@ -182,7 +182,7 @@ public class Bot
             string targetUid = pair[0].Trim();
             string content = pair[1].Trim();
             int messageNum = await Globals.MessageRepository.GetMessageNum(uid);
-            if (!targetUid.IsNumeric() || content.Length > 20 || messageNum > 30) return;
+            if (!targetUid.IsNumeric() || content.Length > 20 || messageNum > 50) return;
 
             bool exist = await Globals.MessageRepository.CheckExistByUidAndTargetUid(uid, targetUid);
             if (exist)
