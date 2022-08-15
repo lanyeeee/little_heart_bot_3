@@ -20,6 +20,14 @@ public class MessageRepository
         return result.ToList();
     }
 
+    public async Task<List<MessageEntity>> GetUncompletedMessagesByUid(string? uid)
+    {
+        string sql = $"select * from message_table where completed = 0 and uid = {uid}";
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        var result = await conn.QueryAsync<MessageEntity>(sql);
+        return result.ToList();
+    }
+
     public async Task MarkCookieError(int? code, string? response, string? uid)
     {
         string sql = "update message_table set code = @Code, response = @Response where uid = @Uid";
