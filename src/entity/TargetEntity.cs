@@ -16,7 +16,7 @@ public class TargetEntity
     public int WatchedSeconds { get; set; }
     public int Completed { get; set; }
 
-    private async Task<Dictionary<string, string?>> GetPayload(string? csrf, Logger logger)
+    private async Task<Dictionary<string, string?>?> GetPayload(string? csrf, Logger logger)
     {
         var uri = new Uri($"https://api.live.bilibili.com/xlive/web-room/v1/index/getInfoByRoom?&room_id={RoomId}");
 
@@ -28,7 +28,14 @@ public class TargetEntity
         JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
         int? code = (int?)response["code"];
 
-        if (code != 0)
+        if (code == 19002005) //房间已加密
+        {
+            await logger.Log(response);
+            await logger.Log($"uid {Uid} 获取直播间信息失败");
+            await Globals.TargetRepository.SetCompleted(1, Id);
+            return null;
+        }
+        else if (code != 0)
         {
             await logger.Log(response);
             await logger.Log($"uid {Uid} 获取直播间信息失败");
@@ -56,9 +63,10 @@ public class TargetEntity
         };
     }
 
-    private async Task<Dictionary<string, string?>> PostE(string? cookie, string? csrf, Logger logger)
+    private async Task<Dictionary<string, string?>?> PostE(string? cookie, string? csrf, Logger logger)
     {
-        Dictionary<string, string?> payload = await GetPayload(csrf, logger);
+        Dictionary<string, string?>? payload = await GetPayload(csrf, logger);
+        if (payload == null) return null;
 
         HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
         {
@@ -188,7 +196,8 @@ public class TargetEntity
 #if DEBUG
         catch (Exception e)
         {
-            Console.WriteLine(e);
+            await logger.Log($"uid {Uid} 在给 {TargetName} 发X心跳包时发生异常");
+            await logger.Log(e);
             throw;
         }
 #endif
@@ -196,6 +205,7 @@ public class TargetEntity
 
     private async Task<int> GetExp(Logger logger)
     {
+        Again:
         try
         {
             var uri = new Uri(
@@ -217,10 +227,10 @@ public class TargetEntity
             await Globals.MessageRepository.DeleteByUidAndTargetUid(Uid, TargetUid);
             return -1;
         }
-        catch (Exception e)
+        catch (HttpRequestException)
         {
-            Console.WriteLine(e);
-            return -1;
+            await Task.Delay(1000);
+            goto Again;
         }
     }
 
@@ -271,7 +281,8 @@ public class TargetEntity
     {
         if (await IsCompleted(logger)) return;
 
-        Dictionary<string, string?> payload = await PostE(cookie, csrf, logger);
+        Dictionary<string, string?>? payload = await PostE(cookie, csrf, logger);
+        if (payload == null) return;
 
         JArray id = JArray.Parse(payload["id"]!);
         if ((int?)id[0] == 0 || (int?)id[1] == 0)

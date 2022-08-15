@@ -68,7 +68,7 @@ public class Bot
         JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
         int? code = (int?)response["code"];
 
-        if (code == -400) return null;
+        if (code == -400 || code == -404) return null;
 
         if (code != 0)
         {
@@ -221,11 +221,12 @@ public class Bot
                 List<TargetEntity> targets = await Globals.TargetRepository.GetTargetsByUid(uid);
                 foreach (var target in targets)
                 {
-                    bool exist = await Globals.TargetRepository.CheckExistByUidAndTargetUid(uid, target.Uid);
+                    bool exist = await Globals.TargetRepository.CheckExistByUidAndTargetUid(uid, target.TargetUid);
                     if (exist)
                     {
-                        await Globals.MessageRepository.SetContentByUidAndTargetUid("飘过~", uid, target.Uid);
-                        await Globals.MessageRepository.SetCodeAndResponseByUidAndTargetUid(0, null, uid, target.Uid);
+                        await Globals.MessageRepository.SetContentByUidAndTargetUid("飘过~", uid, target.TargetUid);
+                        await Globals.MessageRepository.SetCodeAndResponseByUidAndTargetUid(0, null, uid,
+                            target.TargetUid);
                     }
                     else
                     {
@@ -408,7 +409,10 @@ public class Bot
             {
                 await CheckNewDay();
                 await HandleIncomingMessage();
+
                 Globals.ReceiveStatus = 0;
+                if (_talking) Globals.SendStatus = 0;
+                else Globals.SendStatus = -2;
             }
             catch (ApiException)
             {
@@ -418,7 +422,7 @@ public class Bot
                 while (cd != 0)
                 {
                     await _logger.Log($"请求过于频繁，还需冷却 {cd} 分钟");
-                    await Task.Delay(cd * 60 * 1000);
+                    await Task.Delay(60 * 1000);
                     cd--;
                 }
             }
