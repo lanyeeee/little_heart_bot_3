@@ -17,7 +17,8 @@ public class UserEntity
 
     public async Task SendMessage(Logger logger)
     {
-        List<MessageEntity> messages = await Globals.MessageRepository.GetMessagesByUid(Uid);
+        List<MessageEntity> messages = await Globals.MessageRepository.GetUncompletedMessagesByUid(Uid);
+
         foreach (var message in messages)
         {
             await message.Send(Cookie, Csrf, logger);
@@ -32,9 +33,14 @@ public class UserEntity
         List<TargetEntity> targets = await Globals.TargetRepository.GetUncompletedTargetsByUid(Uid);
 
 #if DEBUG
-        Console.WriteLine($"uid {Uid}: targets.Count={targets.Count}");
+        Console.WriteLine($"uid {Uid}: 未完成的目标数: {targets.Count}");
 #endif
-        await logger.Log($"uid {Uid} 正在观看直播，共有 {targets.Count} 个目标");
+        if (targets.Count > 10)
+        {
+            targets = targets.GetRange(0, 10);
+        }
+
+        await logger.Log($"uid {Uid} 正在观看直播，目前同时观看 {targets.Count} 个目标");
 
         var tasks = new List<Task>();
         targets.ForEach(target => tasks.Add(target.Start(Cookie, Csrf, logger)));
@@ -56,11 +62,11 @@ public class UserEntity
         List<MessageEntity> messages = await Globals.MessageRepository.GetMessagesByUid(Uid);
 
         string result = "";
-        result += $"目标({targets.Count}/10)：\n";
+        result += $"目标({targets.Count}/50)：\n";
         targets.ForEach(target => result += $"{target.TargetName}\n");
 
         result += "\n";
-        result += $"弹幕({messages.Count}/30)：\n";
+        result += $"弹幕({messages.Count}/50)：\n";
         messages.ForEach(message => result += $"{message.TargetName}\n");
 
         result += "\n";
@@ -90,7 +96,7 @@ public class UserEntity
 
         List<MessageEntity> messages = await Globals.MessageRepository.GetMessagesByUid(Uid);
         string result = "";
-        result += $"弹幕({messages.Count}/30)：\n\n";
+        result += $"弹幕({messages.Count}/50)：\n\n";
         messages.ForEach(message =>
         {
             result += $"{message.TargetName}：\n";
@@ -120,7 +126,7 @@ public class UserEntity
 
         List<TargetEntity> targets = await Globals.TargetRepository.GetTargetsByUid(Uid);
         string result = "";
-        result += $"目标({targets.Count}/10)：\n\n";
+        result += $"目标({targets.Count}/50)：\n\n";
         targets.ForEach(target =>
         {
             result += $"{target.TargetName}：\n";

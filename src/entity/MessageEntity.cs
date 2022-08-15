@@ -89,12 +89,12 @@ public class MessageEntity
 
         Code = (int?)response["code"];
         Response = response.ToString();
+        Completed = 1;
+        await Globals.MessageRepository.SetCompleted(Completed, Id);
         await Globals.MessageRepository.SetCodeAndResponse(Code, Response, Id);
 
         if (Code == 0)
         {
-            Completed = 1;
-            await Globals.MessageRepository.SetCompleted(Completed, Id);
 #if DEBUG
             Console.WriteLine($"uid {Uid} 给 {TargetName} 发送弹幕成功");
 #endif
