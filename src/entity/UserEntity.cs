@@ -17,7 +17,8 @@ public class UserEntity
 
     public async Task SendMessage(Logger logger)
     {
-        List<MessageEntity> messages = await Globals.MessageRepository.GetMessagesByUid(Uid);
+        List<MessageEntity> messages = await Globals.MessageRepository.GetUncompletedMessagesByUid(Uid);
+
         foreach (var message in messages)
         {
             await message.Send(Cookie, Csrf, logger);
@@ -32,7 +33,7 @@ public class UserEntity
         List<TargetEntity> targets = await Globals.TargetRepository.GetUncompletedTargetsByUid(Uid);
 
 #if DEBUG
-        Console.WriteLine($"uid {Uid}: targets.Count={targets.Count}");
+        Console.WriteLine($"uid {Uid}: 未完成的目标数: {targets.Count}");
 #endif
         if (targets.Count > 10)
         {
