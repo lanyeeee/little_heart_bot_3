@@ -61,14 +61,26 @@ public class Bot
         HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
         {
             Method = HttpMethod.Get,
-            RequestUri = new Uri($"https://api.bilibili.com/x/space/acc/info?mid={targetUid}")
+            RequestUri = new Uri($"https://api.bilibili.com/x/space/acc/info?mid={targetUid}"),
+            Headers =
+            {
+                {
+                    "user-agent",
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36"
+                }
+            }
         });
         await Task.Delay(1000);
 
         JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
         int? code = (int?)response["code"];
 
-        if (code == -400 || code == -404) return null;
+        if (code == -400 || code == -404)
+        {
+            await _logger.Log(response);
+            await _logger.Log($"uid {uid} 获取 {targetUid} 的直播间数据失败");
+            return null;
+        }
 
         if (code != 0)
         {
