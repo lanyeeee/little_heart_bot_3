@@ -203,29 +203,41 @@ public class TargetEntity
 #endif
     }
 
-    private async Task<int> GetExp(Logger logger)
+    private async Task<int> GetExp(string? cookie, Logger logger)
     {
         Again:
         try
         {
             var uri = new Uri(
-                $"https://api.live.bilibili.com/fans_medal/v1/fans_medal/get_fans_medal_info?uid={Uid}&target_id={TargetUid}");
+                $"https://api.live.bilibili.com/xlive/app-ucenter/v1/fansMedal/fans_medal_info?target_id={TargetUid}");
 
             HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
             {
                 Method = HttpMethod.Get,
-                RequestUri = uri
+                RequestUri = uri,
+                Headers = { { "cookie", cookie } }
             });
 
             JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
-            return (int)response["data"]!["today_feed"]!;
-        }
-        catch (ArgumentException)
-        {
-            await logger.Log($"uid {Uid} 未持有 {TargetName} 的粉丝牌");
-            await Globals.TargetRepository.Delete(Id);
-            await Globals.MessageRepository.DeleteByUidAndTargetUid(Uid, TargetUid);
-            return -1;
+
+            int code = (int)response["code"]!;
+            if (code != 0)
+            {
+                await logger.Log(response);
+                await logger.Log($"uid {Uid} 查询 {TargetName} 的粉丝牌信息失败");
+                return -1;
+            }
+
+            bool hasMedal = (bool)response["data"]!["has_fans_medal"]!;
+            if (!hasMedal)
+            {
+                await logger.Log($"uid {Uid} 未持有 {TargetName} 的粉丝牌");
+                await Globals.TargetRepository.Delete(Id);
+                await Globals.MessageRepository.DeleteByUidAndTargetUid(Uid, TargetUid);
+                return -1;
+            }
+
+            return (int)response["data"]!["my_fans_medal"]!["today_feed"]!;
         }
         catch (HttpRequestException)
         {
@@ -234,9 +246,9 @@ public class TargetEntity
         }
     }
 
-    private async Task<bool> IsCompleted(Logger logger)
+    private async Task<bool> IsCompleted(string? cookie, Logger logger)
     {
-        Exp = await GetExp(logger);
+        Exp = await GetExp(cookie, logger);
         if (Exp == -1) return true;
 
         await Globals.TargetRepository.SetExp(Exp, Id);
@@ -271,7 +283,7 @@ public class TargetEntity
             await Globals.TargetRepository.SetWatchedSeconds(WatchedSeconds, Id);
 
             //每隔5分钟检查一次是否完成，完成则返回
-            if (WatchedSeconds % 300 == 0 && await IsCompleted(logger)) return;
+            if (WatchedSeconds % 300 == 0 && await IsCompleted(cookie, logger)) return;
 
             await Task.Delay(interval * 1000);
         }
@@ -279,7 +291,7 @@ public class TargetEntity
 
     public async Task Start(string? cookie, string? csrf, Logger logger)
     {
-        if (await IsCompleted(logger)) return;
+        if (await IsCompleted(cookie, logger)) return;
 
         Dictionary<string, string?>? payload = await PostE(cookie, csrf, logger);
         if (payload == null) return;
