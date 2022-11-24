@@ -221,6 +221,14 @@ public class TargetEntity
             JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync());
 
             int code = (int)response["code"]!;
+            if (code == -101)
+            {
+                await logger.Log(response);
+                await logger.Log("uid 的cookie已过期");
+                await Globals.UserRepository.MarkCookieError(Uid);
+                return -1;
+            }
+
             if (code != 0)
             {
                 await logger.Log(response);
