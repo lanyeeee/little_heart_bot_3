@@ -29,7 +29,7 @@ public class Logger
         await _writer.WriteLineAsync(text);
         await _writer.FlushAsync();
 
-        _count++;
+        Interlocked.Increment(ref _count);
         if (_count == 10)
         {
             if (NeedToRoll())
@@ -37,7 +37,7 @@ public class Logger
                 Roll();
             }
 
-            _count = 0;
+            Interlocked.Exchange(ref _count, 0);
         }
     }
 
@@ -49,6 +49,6 @@ public class Logger
     private void Roll()
     {
         _fileName = _name + "_" + DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-        _writer = File.AppendText("log/" + _fileName);
+        _writer = TextWriter.Synchronized(File.AppendText("log/" + _fileName));
     }
 }
