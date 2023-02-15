@@ -245,7 +245,17 @@ public class TargetEntity
                 return -1;
             }
 
-            return (int)response["data"]!["my_fans_medal"]!["today_feed"]!;
+            int exp = response["data"]!["intimacy_tasks"]!
+                .Where(task =>
+                {
+                    string? title = (string?)task["title"];
+                    return title is "观看直播" or "每日首条弹幕" or "每日首次给主播双击点赞";
+                })
+                .Select(task => (int)task["cur_progress"]!)
+                .Sum();
+
+            // return (int)response["data"]!["my_fans_medal"]!["today_feed"]!;
+            return exp;
         }
         catch (HttpRequestException)
         {
@@ -263,16 +273,13 @@ public class TargetEntity
 #if DEBUG
         Console.WriteLine($"uid {Uid}: {TargetName}:{Exp}");
 #endif
-        //经验达到1500或观看时长超过75分钟则判定为完成
-        if (Exp == 1500 || WatchedSeconds >= 75 * 60)
-        {
-            Completed = 1;
-            await logger.Log($"uid {Uid} 在 {TargetName} 的任务完成，观看时长 {WatchedSeconds / 60} 分钟，获得经验 {Exp}");
-            await Globals.TargetRepository.SetCompleted(Completed, Id);
-            return true;
-        }
+        //只有经验>=1500或观看时长>=75分钟才判定为完成
+        if (Exp < 1500 && WatchedSeconds < 75 * 60) return false;
 
-        return false;
+        Completed = 1;
+        await logger.Log($"uid {Uid} 在 {TargetName} 的任务完成，观看时长 {WatchedSeconds / 60} 分钟，获得经验 {Exp}");
+        await Globals.TargetRepository.SetCompleted(Completed, Id);
+        return true;
     }
 
     private async Task HeartBeat(string? cookie, Dictionary<string, string?> payload, Logger logger)
