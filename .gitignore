@@ -5,3 +5,5 @@ log/
 riderModule.iml
 /_ReSharper.Caches/
 .VSCodeCounter/
+
+.idea/

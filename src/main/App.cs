@@ -15,7 +15,7 @@ public class App
     private App()
     {
         _instance = this;
-        _logger = new Logger("app");
+        _logger = new Logger("app", 1024 * 1024);
     }
 
     private async Task VerifyCookies()

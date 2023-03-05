@@ -25,7 +25,7 @@ public class Bot
         DateTimeOffset today = DateTime.Today;
         _midnight = today.ToUnixTimeSeconds();
 
-        _logger = new Logger("bot");
+        _logger = new Logger("bot", 1024 * 1024);
 
         _botEntity = Globals.BotRepository.GetBot()!;
         Globals.AppStatus = _botEntity.AppStatus;
