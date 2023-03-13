@@ -28,7 +28,7 @@ use little_heart_bot_3;
 
 **bot_table**
 
-```
+```mysql
 create table bot_table
 (
     uid            varchar(20)                            not null comment 'uid'
@@ -45,21 +45,20 @@ create table bot_table
     collate = utf8mb4_unicode_ci;
 ```
 
-**target_table**
+**message_table**
 
-```
-create table target_table
+```mysql
+create table message_table
 (
-    num         int auto_increment comment 'primary key'
+    id          int auto_increment comment 'primary key'
         primary key,
     uid         varchar(20)                        not null comment 'uid',
     target_uid  varchar(20)                        null comment 'target_uid',
     target_name varchar(30)                        null comment 'target name',
     room_id     varchar(20)                        null comment 'room_id',
-    like_num    int      default 0                 null comment 'how many like had post',
-    share_num   int      default 0                 null comment 'how many time had shared',
-    msg_content varchar(30)                        null comment 'content',
-    msg_status  int      default 0                 null comment '0 unfinished,1 completed,-1 msg invalid,-2 UL error,-3 cookie invalid,-4 without room,-5 baned',
+    content     varchar(30)                        null comment 'content',
+    code        int      default 0                 null,
+    response    json                               null,
     completed   int      default 0                 not null comment 'completed or not',
     create_time datetime default CURRENT_TIMESTAMP null,
     update_time datetime default CURRENT_TIMESTAMP null on update CURRENT_TIMESTAMP
@@ -67,20 +66,38 @@ create table target_table
     collate = utf8mb4_unicode_ci;
 ```
 
+**target_table**
+
+```mysql
+create table target_table
+(
+    id              int auto_increment
+        primary key,
+    uid             varchar(20)                        null,
+    target_uid      varchar(20)                        null,
+    target_name     varchar(20)                        null,
+    room_id         varchar(20)                        null,
+    exp             int      default 0                 null,
+    watched_seconds int      default 0                 null,
+    completed       int      default 0                 null,
+    create_time     datetime default CURRENT_TIMESTAMP null,
+    update_time     datetime default CURRENT_TIMESTAMP null on update CURRENT_TIMESTAMP
+);
+```
+
 **user_table**
 
-```
+```mysql
 create table user_table
 (
     uid              varchar(20)                             not null comment 'uid'
         primary key,
-    cookie           varchar(2000) default ''                not null,
-    csrf             varchar(100)  default ''                not null,
+    cookie           varchar(2000) default ''                null,
+    csrf             varchar(100)  default ''                null,
     completed        int           default 0                 null comment 'task completed or not',
     cookie_status    int           default 0                 null comment '0 unknow,1 normal,-1 error',
     config_num       int           default 0                 null comment 'how many times the user check the config today',
-    target_num       int           default 0                 not null comment 'how many targets the user set',
-    msg_timestamp    varchar(255)  default '0'               null comment 'latest message timestamp',
+    read_timestamp   varchar(255)  default '0'               null comment 'latest message timestamp',
     config_timestamp varchar(255)  default '0'               not null,
     create_time      datetime      default CURRENT_TIMESTAMP null,
     update_time      datetime      default CURRENT_TIMESTAMP null on update CURRENT_TIMESTAMP
