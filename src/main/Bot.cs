@@ -301,17 +301,83 @@ public class Bot
         }
         else if (command == "/message_config")
         {
-            string? content = await _users[uid].GetMessageConfigString(_logger);
-            if (content == null) return;
+            if (parameter == null)
+            {
+                string? content = await _users[uid].GetMessageConfigString(_logger);
+                if (content == null) return;
 
-            await SendMessage(content, uid);
+                if (content.Length > 450)
+                {
+                    content =
+                        "设置的弹幕过多，配置信息长度大于500，超过了私信长度的上限，无法发送\n\n请尝试使用\n/message_config 目标uid\n进行单个查询\n\n或者使用/message_config all\n获取分段的完整配置信息(每段消耗一次查询次数)";
+                }
+
+                content += $"\n已用查询次数({_users[uid].ConfigNum + 1}/10)\n";
+                await SendMessage(content, uid);
+            }
+            else
+            {
+                parameter = parameter.Trim();
+                if (parameter == "all")
+                {
+                    List<string>? contents = await _users[uid].GetMessageConfigStringSplit(_logger);
+                    if (contents == null) return;
+
+                    foreach (string message in contents)
+                    {
+                        string content = message + $"\n已用查询次数({_users[uid].ConfigNum + 1}/10)\n";
+                        await SendMessage(content, uid);
+                        await Task.Delay(1000);
+                    }
+                }
+                else
+                {
+                    string? content = await _users[uid].GetMessageConfigString(parameter.Trim(), _logger);
+                    if (content == null) return;
+                    content += $"\n已用查询次数({_users[uid].ConfigNum + 1}/10)\n";
+                    await SendMessage(content, uid);
+                }
+            }
         }
         else if (command == "/target_config")
         {
-            string? content = await _users[uid].GetTargetConfigString(_logger);
-            if (content == null) return;
+            if (parameter == null)
+            {
+                string? content = await _users[uid].GetTargetConfigString(_logger);
+                if (content == null) return;
 
-            await SendMessage(content, uid);
+                if (content.Length > 450)
+                {
+                    content =
+                        "设置的目标过多，配置信息长度大于500，超过了私信长度的上限，无法发送\n\n请尝试使用\n/target_config 目标uid\n进行单个查询\n\n或者使用\n/target_config all\n获取分段的完整配置信息(每段消耗一次查询次数)\n";
+                }
+
+                content += $"\n已用查询次数({_users[uid].ConfigNum + 1}/10)\n";
+                await SendMessage(content, uid);
+            }
+            else
+            {
+                parameter = parameter.Trim();
+                if (parameter == "all")
+                {
+                    List<string>? contents = await _users[uid].GetTargetConfigStringSplit(_logger);
+                    if (contents == null) return;
+
+                    foreach (string message in contents)
+                    {
+                        string content = message + $"\n已用查询次数({_users[uid].ConfigNum + 1}/10)\n";
+                        await SendMessage(content, uid);
+                        await Task.Delay(1000);
+                    }
+                }
+                else
+                {
+                    string? content = await _users[uid].GetTargetConfigString(parameter.Trim(), _logger);
+                    if (content == null) return;
+                    content += $"\n已用查询次数({_users[uid].ConfigNum + 1}/10)\n";
+                    await SendMessage(content, uid);
+                }
+            }
         }
         else if (command == "/delete")
         {
