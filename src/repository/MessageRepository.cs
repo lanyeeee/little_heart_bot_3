@@ -20,6 +20,15 @@ public class MessageRepository
         return result.ToList();
     }
 
+    public async Task<MessageEntity?> GetMessagesByUidAndTargetUid(string? uid, string? targetUid)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        string sql = $"select * from message_table where uid = {uid} and target_uid = @TargetUid";
+        var parameters = new { TargetUid = targetUid };
+        var result = await conn.QuerySingleOrDefaultAsync<MessageEntity?>(sql, parameters);
+        return result;
+    }
+
     public async Task<List<MessageEntity>> GetUncompletedMessagesByUid(string? uid)
     {
         string sql = $"select * from message_table where completed = 0 and uid = {uid}";
