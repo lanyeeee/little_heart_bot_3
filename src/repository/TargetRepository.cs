@@ -102,4 +102,13 @@ public class TargetRepository
         var result = await conn.QueryAsync<TargetEntity>(sql);
         return result.ToList();
     }
+
+    public async Task<TargetEntity?> GetTargetsByUidAndTargetUid(string? uid, string? targetUid)
+    {
+        await using var conn = new MySqlConnection(Globals.ConnectionString);
+        string sql = $"select * from target_table where uid = {uid} and target_uid = @TargetUid";
+        var parameters = new { TargetUid = targetUid };
+        var result = await conn.QuerySingleOrDefaultAsync<TargetEntity?>(sql, parameters);
+        return result;
+    }
 }
