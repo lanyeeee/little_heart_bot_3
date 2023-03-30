@@ -1,3 +1,4 @@
+using System.Text;
 using little_heart_bot_3.others;
 using Newtonsoft.Json.Linq;
 
@@ -64,6 +65,11 @@ public class UserEntity
         result += $"目标({targets.Count}/50)：\n";
         targets.ForEach(target => result += $"{target.TargetName}\n");
 
+        if (result.Length > 350)
+        {
+            result = $"目标({targets.Count}/50)：\n目标过多，信息超过了私信长度的上限，所以/config里无法携带目标的配置信息，请尝试使用/target_config查看目标配置\n";
+        }
+
         result += "\n";
         if (string.IsNullOrEmpty(Cookie))
         {
@@ -78,10 +84,6 @@ public class UserEntity
             result += $"cookie：有，{cookieMsg}\n";
         }
 
-        if (result.Length > 450)
-        {
-            result = "设置的目标过多，配置信息长度大于500，超过了私信长度的上限，无法发送\n";
-        }
 
         string targetMsg = Completed == 1 ? "是" : "否";
         result += $"今日任务是否已完成：{targetMsg}\n";
@@ -114,12 +116,43 @@ public class UserEntity
             result += $"状态：{statusMsg}\n";
         });
 
-        if (result.Length > 450)
+
+        return result;
+    }
+
+    public async Task<List<string>?> GetMessageConfigStringSplit(Logger logger)
+    {
+        string? content = await GetMessageConfigString(logger);
+
+        if (content == null)
         {
-            result = "设置的弹幕过多，配置信息长度大于500，超过了私信长度的上限，无法发送\n";
+            return null;
         }
 
-        result += $"已用查询次数({ConfigNum + 1}/10)\n";
+        return SplitString(content, 400);
+    }
+
+    public async Task<string?> GetMessageConfigString(string targetUid, Logger logger)
+    {
+        long nowTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds();
+        if (ConfigNum >= 10 || nowTimestamp - Int64.Parse(ConfigTimestamp!) < 60) return null;
+
+        MessageEntity? message = await Globals.MessageRepository.GetMessagesByUidAndTargetUid(Uid, targetUid);
+        if (message == null) return null;
+
+        string result = $"{message.TargetName}：{message.Content}\n";
+        string statusMsg;
+        if (message.Response == null)
+        {
+            statusMsg = "未发送\n";
+        }
+        else
+        {
+            JObject response = JObject.Parse(message.Response);
+            statusMsg = $"已发送，代码:{message.Code}，信息:{(string?)response["message"]}\n";
+        }
+
+        result += $"状态：{statusMsg}\n";
         return result;
     }
 
@@ -135,12 +168,57 @@ public class UserEntity
         targets.ForEach(target => { result += $"{target.TargetName}：{target.WatchedSeconds / 60}\n"; });
         result += "\n";
 
-        if (result.Length > 450)
+        return result;
+    }
+
+    public async Task<List<string>?> GetTargetConfigStringSplit(Logger logger)
+    {
+        string? content = await GetTargetConfigString(logger);
+
+        if (content == null)
         {
-            result = "设置的目标过多，配置信息长度大于500，超过了私信长度的上限，无法发送\n";
+            return null;
         }
 
-        result += $"已用查询次数({ConfigNum + 1}/10)\n";
+        return SplitString(content, 400);
+    }
+
+    public async Task<string?> GetTargetConfigString(string targetUid, Logger logger)
+    {
+        long nowTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds();
+        if (ConfigNum >= 10 || nowTimestamp - Int64.Parse(ConfigTimestamp!) < 60) return null;
+
+        TargetEntity? target = await Globals.TargetRepository.GetTargetsByUidAndTargetUid(Uid, targetUid);
+        if (target == null) return null;
+
+        string result = "观看时长(分钟)：\n";
+        result += $"{target.TargetName}：{target.WatchedSeconds / 60}\n";
+        result += "\n";
+
         return result;
+    }
+
+    private List<string> SplitString(string config, int maxLength)
+    {
+        // 将字符串按照换行符分割成行
+        string[] lines = config.Split("\n");
+
+        // 将行重新拼接成长度不超过maxLength的小段
+        List<string> contents = new List<string>();
+        StringBuilder contentBuilder = new StringBuilder();
+        foreach (string line in lines)
+        {
+            if (contentBuilder.Length + line.Length > maxLength)
+            {
+                contents.Add(contentBuilder.ToString());
+                contentBuilder.Clear();
+            }
+
+            contentBuilder.Append(line);
+            contentBuilder.Append('\n');
+        }
+
+        contents.Add(contentBuilder.ToString());
+        return contents;
     }
 }
