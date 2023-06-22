@@ -58,18 +58,29 @@ public class Bot
 
     private async Task<JToken?> GetRoomData(string uid, string targetUid)
     {
+        UserEntity? userEntity = await Globals.UserRepository.Get(uid);
+        if (userEntity == null)
+        {
+            await _logger.Log($"找不到uid为 {uid} 的用户");
+            return null;
+        }
+
+        Dictionary<string, string> parameters = new() { { "mid", targetUid } };
+        await Globals.EncWbi(userEntity, parameters, _logger);
+        string queryString = await new FormUrlEncodedContent(parameters).ReadAsStringAsync();
+
         HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
         {
             Method = HttpMethod.Get,
-            RequestUri = new Uri($"https://api.bilibili.com/x/space/acc/info?mid={targetUid}"),
+            RequestUri = new Uri($"https://api.bilibili.com/x/space/wbi/acc/info?{queryString}"),
             Headers =
             {
                 {
                     "user-agent",
                     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36"
                 },
-                { "cookie", _botEntity.Cookie }
-            }
+                { "cookie", userEntity.Cookie }
+            },
         });
         await Task.Delay(1000);
 
@@ -92,6 +103,7 @@ public class Bot
 
         return response["data"];
     }
+
 
     private string GetCsrf(string cookie)
     {
