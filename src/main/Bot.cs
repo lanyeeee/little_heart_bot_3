@@ -65,9 +65,14 @@ public class Bot
             return null;
         }
 
-        Dictionary<string, string> parameters = new() { { "mid", targetUid } };
-        await Globals.EncWbi(userEntity, parameters, _logger);
-        string queryString = await new FormUrlEncodedContent(parameters).ReadAsStringAsync();
+        var (imgKey, subKey) = await Globals.GetWbiKeys();
+        Dictionary<string, string> signedParams = Globals.EncWbi(
+            parameters: new Dictionary<string, string> { { "mid", targetUid } },
+            imgKey: imgKey,
+            subKey: subKey
+        );
+
+        string queryString = await new FormUrlEncodedContent(signedParams).ReadAsStringAsync();
 
         HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
         {
