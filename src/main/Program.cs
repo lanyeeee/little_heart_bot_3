@@ -1,6 +1,9 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
 using Dapper;
+using little_heart_bot_3.entity;
+using little_heart_bot_3.others;
+using little_heart_bot_3.repository;
 
 namespace little_heart_bot_3.main;
 
@@ -13,16 +16,15 @@ public static class Program
 #if DEBUG
         await Test();
 #endif
-        var tasks = new List<Task>
-        {
-            App.Instance.Main(),
-            Bot.Instance.Main()
-        };
-        await Task.WhenAll(tasks);
+        // var tasks = new List<Task>
+        // {
+        //     App.Instance.Main(),
+        //     Bot.Instance.Main()
+        // };
+        // await Task.WhenAll(tasks);
     }
 
     private static async Task Test()
     {
-        await Task.Delay(1);
     }
 }
