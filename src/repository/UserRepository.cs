@@ -62,9 +62,17 @@ public class UserRepository
 
     public async Task<List<UserEntity>> GetAll()
     {
+        List<UserEntity> users = new();
         await using var conn = new MySqlConnection(Globals.ConnectionString);
-        var result = await conn.QueryAsync<UserEntity>("select * from user_table where 1");
-        return result.ToList();
+        var uidResult = await conn.QueryAsync<string>("select uid from user_table where 1");
+        foreach (string uid in uidResult)
+        {
+            UserEntity? user = await Get(uid);
+            if (user == null) continue;
+            users.Add(user);
+        }
+
+        return users;
     }
 
     public async Task SetReadTimestamp(string readTimestamp, string uid)
