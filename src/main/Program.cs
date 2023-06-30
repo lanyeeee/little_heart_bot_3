@@ -16,12 +16,12 @@ public static class Program
 #if DEBUG
         await Test();
 #endif
-        // var tasks = new List<Task>
-        // {
-        //     App.Instance.Main(),
-        //     Bot.Instance.Main()
-        // };
-        // await Task.WhenAll(tasks);
+        var tasks = new List<Task>
+        {
+            App.Instance.Main(),
+            Bot.Instance.Main()
+        };
+        await Task.WhenAll(tasks);
     }
 
     private static async Task Test()
