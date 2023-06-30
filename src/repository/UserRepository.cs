@@ -49,7 +49,15 @@ public class UserRepository
     public async Task<UserEntity?> Get(string? uid)
     {
         await using var conn = new MySqlConnection(Globals.ConnectionString);
-        return await conn.QueryFirstOrDefaultAsync<UserEntity?>($"select * from user_table where uid = {uid}");
+        string sql = $"select * from user_table where uid = {uid}";
+        UserEntity? user = await conn.QueryFirstOrDefaultAsync<UserEntity?>(sql);
+
+        if (user == null) return null;
+
+        user.Targets = await Globals.TargetRepository.GetTargetsByUid(uid);
+        user.Messages = await Globals.MessageRepository.GetMessagesByUid(uid);
+
+        return user;
     }
 
     public async Task<List<UserEntity>> GetAll()
