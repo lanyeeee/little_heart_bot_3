@@ -18,14 +18,32 @@ public class UserRepository
         string sql = $"select * from user_table where completed = 0 and cookie_status = 1 limit {num}";
         await using var conn = new MySqlConnection(Globals.ConnectionString);
         var result = await conn.QueryAsync<UserEntity>(sql);
-        return result.ToList();
+
+        var users = result.ToList();
+
+        foreach (var user in users)
+        {
+            user.Targets = await Globals.TargetRepository.GetTargetsByUid(user.Uid);
+            user.Messages = await Globals.MessageRepository.GetMessagesByUid(user.Uid);
+        }
+
+        return users;
     }
 
     public async Task<List<UserEntity>> GetUnverifiedUsers()
     {
         await using var conn = new MySqlConnection(Globals.ConnectionString);
         var result = await conn.QueryAsync<UserEntity>("select * from user_table where cookie_status = 0");
-        return result.ToList();
+
+        var users = result.ToList();
+
+        foreach (var user in users)
+        {
+            user.Targets = await Globals.TargetRepository.GetTargetsByUid(user.Uid);
+            user.Messages = await Globals.MessageRepository.GetMessagesByUid(user.Uid);
+        }
+
+        return users;
     }
 
     public async Task MarkCookieError(string? uid)
