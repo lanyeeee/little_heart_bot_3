@@ -311,7 +311,7 @@ public class Bot
             }
 #endif
         }
-        else if (command == "/config")
+        else if (command == "/config_all")
         {
             string? content = _users[uid].GetConfigString(_logger);
             if (content == null) return;
