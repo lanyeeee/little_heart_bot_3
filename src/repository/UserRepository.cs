@@ -18,14 +18,32 @@ public class UserRepository
         string sql = $"select * from user_table where completed = 0 and cookie_status = 1 limit {num}";
         await using var conn = new MySqlConnection(Globals.ConnectionString);
         var result = await conn.QueryAsync<UserEntity>(sql);
-        return result.ToList();
+
+        var users = result.ToList();
+
+        foreach (var user in users)
+        {
+            user.Targets = await Globals.TargetRepository.GetTargetsByUid(user.Uid);
+            user.Messages = await Globals.MessageRepository.GetMessagesByUid(user.Uid);
+        }
+
+        return users;
     }
 
     public async Task<List<UserEntity>> GetUnverifiedUsers()
     {
         await using var conn = new MySqlConnection(Globals.ConnectionString);
         var result = await conn.QueryAsync<UserEntity>("select * from user_table where cookie_status = 0");
-        return result.ToList();
+
+        var users = result.ToList();
+
+        foreach (var user in users)
+        {
+            user.Targets = await Globals.TargetRepository.GetTargetsByUid(user.Uid);
+            user.Messages = await Globals.MessageRepository.GetMessagesByUid(user.Uid);
+        }
+
+        return users;
     }
 
     public async Task MarkCookieError(string? uid)
@@ -49,14 +67,30 @@ public class UserRepository
     public async Task<UserEntity?> Get(string? uid)
     {
         await using var conn = new MySqlConnection(Globals.ConnectionString);
-        return await conn.QueryFirstOrDefaultAsync<UserEntity?>($"select * from user_table where uid = {uid}");
+        string sql = $"select * from user_table where uid = {uid}";
+        UserEntity? user = await conn.QueryFirstOrDefaultAsync<UserEntity?>(sql);
+
+        if (user == null) return null;
+
+        user.Targets = await Globals.TargetRepository.GetTargetsByUid(uid);
+        user.Messages = await Globals.MessageRepository.GetMessagesByUid(uid);
+
+        return user;
     }
 
     public async Task<List<UserEntity>> GetAll()
     {
+        List<UserEntity> users = new();
         await using var conn = new MySqlConnection(Globals.ConnectionString);
-        var result = await conn.QueryAsync<UserEntity>("select * from user_table where 1");
-        return result.ToList();
+        var uidResult = await conn.QueryAsync<string>("select uid from user_table where 1");
+        foreach (string uid in uidResult)
+        {
+            UserEntity? user = await Get(uid);
+            if (user == null) continue;
+            users.Add(user);
+        }
+
+        return users;
     }
 
     public async Task SetReadTimestamp(string readTimestamp, string uid)

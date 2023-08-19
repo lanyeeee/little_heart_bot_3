@@ -16,11 +16,16 @@ public class UserEntity
     public string? ReadTimestamp { get; set; }
     public string? ConfigTimestamp { get; set; }
 
+    //一对多
+    public List<MessageEntity>? Messages { get; set; }
+
+    //一对多
+    public List<TargetEntity>? Targets { get; set; }
+
     public async Task SendMessage(Logger logger)
     {
-        List<MessageEntity> messages = await Globals.MessageRepository.GetUncompletedMessagesByUid(Uid);
-
-        foreach (var message in messages)
+        if (Messages == null) return;
+        foreach (var message in Messages)
         {
             await message.Send(Cookie, Csrf, logger);
         }
@@ -30,44 +35,48 @@ public class UserEntity
     {
         UserEntity? thisUser = await Globals.UserRepository.Get(Uid);
         if (thisUser == null || thisUser.CookieStatus != 1) return;
+        
+        if(Targets==null) return;
 
-        List<TargetEntity> targets = await Globals.TargetRepository.GetUncompletedTargetsByUid(Uid);
-
-#if DEBUG
-        Console.WriteLine($"uid {Uid}: 未完成的目标数: {targets.Count}");
-#endif
-        if (targets.Count > 10)
-        {
-            targets = targets.GetRange(0, 10);
-        }
-
-        await logger.Log($"uid {Uid} 正在观看直播，目前同时观看 {targets.Count} 个目标");
-
+        int maxCountPerRound = 10;//每个用户每轮最多同时观看多少个直播
+        int selectedCount = 0;//已经在观看的直播数
         var tasks = new List<Task>();
-        targets.ForEach(target => tasks.Add(target.Start(Cookie, Csrf, logger)));
+        
+        foreach (var target in Targets)
+        {
+            if(target.Completed == 1) continue;//已完成的任务就跳过
+            
+            tasks.Add(target.Start(Cookie, Csrf, logger));
+            
+            selectedCount++;
+            if(selectedCount >= maxCountPerRound) break;
+        }
+        
+        await logger.Log($"uid {Uid} 正在观看直播，目前同时观看 {selectedCount} 个目标");
         await Task.WhenAll(tasks);
 
-        targets = await Globals.TargetRepository.GetUncompletedTargetsByUid(Uid);
-        if (targets.Count != 0) return;
-
+        //如果有任何一个任务未完成
+        if(Targets.Any(t=>t.Completed!=1)) return;
+        
+        //如果所有任务都完成了
         Completed = 1;
         await Globals.UserRepository.SetCompleted(Completed, Uid);
     }
 
-    public async Task<string?> GetConfigString(Logger logger)
+    public string? GetConfigString(Logger logger)
     {
         long nowTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds();
         if (ConfigNum >= 10 || nowTimestamp - Int64.Parse(ConfigTimestamp!) < 60) return null;
 
-        List<TargetEntity> targets = await Globals.TargetRepository.GetTargetsByUid(Uid);
+        if (Targets == null) return null;
 
         string result = "";
-        result += $"目标({targets.Count}/50)：\n";
-        targets.ForEach(target => result += $"{target.TargetName}\n");
+        result += $"目标({Targets.Count}/50)：\n";
+        Targets.ForEach(target => result += $"{target.TargetName}\n");
 
         if (result.Length > 350)
         {
-            result = $"目标({targets.Count}/50)：\n目标过多，信息超过了私信长度的上限，所以/config里无法携带目标的配置信息，请尝试使用/target_config查看目标配置\n";
+            result = $"目标({Targets.Count}/50)：\n目标过多，信息超过了私信长度的上限，所以/config里无法携带目标的配置信息，请尝试使用/target_config查看目标配置\n";
         }
 
         result += "\n";
@@ -91,15 +100,16 @@ public class UserEntity
         return result;
     }
 
-    public async Task<string?> GetMessageConfigString(Logger logger)
+    public string? GetMessageConfigString(Logger logger)
     {
         long nowTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds();
         if (ConfigNum >= 10 || nowTimestamp - Int64.Parse(ConfigTimestamp!) < 60) return null;
 
-        List<MessageEntity> messages = await Globals.MessageRepository.GetMessagesByUid(Uid);
+        if (Messages == null) return null;
+
         string result = "";
-        result += $"弹幕({messages.Count}/50)：\n\n";
-        messages.ForEach(message =>
+        result += $"弹幕({Messages.Count}/50)：\n\n";
+        Messages.ForEach(message =>
         {
             result += $"{message.TargetName}：{message.Content}\n";
             string statusMsg;
@@ -120,9 +130,9 @@ public class UserEntity
         return result;
     }
 
-    public async Task<List<string>?> GetMessageConfigStringSplit(Logger logger)
+    public List<string>? GetMessageConfigStringSplit(Logger logger)
     {
-        string? content = await GetMessageConfigString(logger);
+        string? content = GetMessageConfigString(logger);
 
         if (content == null)
         {
@@ -156,24 +166,25 @@ public class UserEntity
         return result;
     }
 
-    public async Task<string?> GetTargetConfigString(Logger logger)
+    public string? GetTargetConfigString(Logger logger)
     {
         long nowTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds();
         if (ConfigNum >= 10 || nowTimestamp - Int64.Parse(ConfigTimestamp!) < 60) return null;
 
-        List<TargetEntity> targets = await Globals.TargetRepository.GetTargetsByUid(Uid);
+        if (Targets == null) return null;
+
         string result = "";
-        result += $"目标({targets.Count}/50)\n\n";
+        result += $"目标({Targets.Count}/50)\n\n";
         result += "观看时长(分钟)：\n";
-        targets.ForEach(target => { result += $"{target.TargetName}：{target.WatchedSeconds / 60}\n"; });
+        Targets.ForEach(target => { result += $"{target.TargetName}：{target.WatchedSeconds / 60}\n"; });
         result += "\n";
 
         return result;
     }
 
-    public async Task<List<string>?> GetTargetConfigStringSplit(Logger logger)
+    public List<string>? GetTargetConfigStringSplit(Logger logger)
     {
-        string? content = await GetTargetConfigString(logger);
+        string? content = GetTargetConfigString(logger);
 
         if (content == null)
         {
