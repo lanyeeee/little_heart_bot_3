@@ -65,9 +65,14 @@ public class Bot
             return null;
         }
 
-        Dictionary<string, string> parameters = new() { { "mid", targetUid } };
-        await Globals.EncWbi(userEntity, parameters, _logger);
-        string queryString = await new FormUrlEncodedContent(parameters).ReadAsStringAsync();
+        var (imgKey, subKey) = await Globals.GetWbiKeys();
+        Dictionary<string, string> signedParams = Globals.EncWbi(
+            parameters: new Dictionary<string, string> { { "mid", targetUid } },
+            imgKey: imgKey,
+            subKey: subKey
+        );
+
+        string queryString = await new FormUrlEncodedContent(signedParams).ReadAsStringAsync();
 
         HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
         {
@@ -243,7 +248,9 @@ public class Bot
 
             if (parameter == "all")
             {
-                List<TargetEntity> targets = await Globals.TargetRepository.GetTargetsByUid(uid);
+                List<TargetEntity>? targets = _users[uid].Targets;
+                if (targets == null) return;
+
                 foreach (var target in targets)
                 {
                     bool exist = await Globals.TargetRepository.CheckExistByUidAndTargetUid(uid, target.TargetUid);
@@ -306,7 +313,7 @@ public class Bot
         }
         else if (command == "/config")
         {
-            string? content = await _users[uid].GetConfigString(_logger);
+            string? content = _users[uid].GetConfigString(_logger);
             if (content == null) return;
 
             await SendMessage(content, uid);
@@ -315,7 +322,7 @@ public class Bot
         {
             if (parameter == null)
             {
-                string? content = await _users[uid].GetMessageConfigString(_logger);
+                string? content = _users[uid].GetMessageConfigString(_logger);
                 if (content == null) return;
 
                 if (content.Length > 450)
@@ -332,7 +339,7 @@ public class Bot
                 parameter = parameter.Trim();
                 if (parameter == "all")
                 {
-                    List<string>? contents = await _users[uid].GetMessageConfigStringSplit(_logger);
+                    List<string>? contents = _users[uid].GetMessageConfigStringSplit(_logger);
                     if (contents == null) return;
 
                     foreach (string message in contents)
@@ -355,7 +362,7 @@ public class Bot
         {
             if (parameter == null)
             {
-                string? content = await _users[uid].GetTargetConfigString(_logger);
+                string? content = _users[uid].GetTargetConfigString(_logger);
                 if (content == null) return;
 
                 if (content.Length > 450)
@@ -372,7 +379,7 @@ public class Bot
                 parameter = parameter.Trim();
                 if (parameter == "all")
                 {
-                    List<string>? contents = await _users[uid].GetTargetConfigStringSplit(_logger);
+                    List<string>? contents = _users[uid].GetTargetConfigStringSplit(_logger);
                     if (contents == null) return;
 
                     foreach (string message in contents)

@@ -82,7 +82,8 @@ create table target_table
     completed       int      default 0                 null,
     create_time     datetime default CURRENT_TIMESTAMP null,
     update_time     datetime default CURRENT_TIMESTAMP null on update CURRENT_TIMESTAMP
-);
+)
+    collate = utf8mb4_unicode_ci;
 ```
 
 **user_table**
