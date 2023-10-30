@@ -1,4 +1,4 @@
-namespace little_heart_bot_3.others;
+namespace little_heart_bot_3.Others;
 
 public static class ExtensionMethods
 {

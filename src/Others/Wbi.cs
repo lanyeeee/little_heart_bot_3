@@ -1,44 +1,11 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
-using little_heart_bot_3.repository;
-using MySqlConnector;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 
-namespace little_heart_bot_3.others;
+namespace little_heart_bot_3.Others;
 
-public static class Globals
+public static class Wbi
 {
-    public static int AppStatus { get; set; }
-    public static int ReceiveStatus { get; set; }
-    public static int SendStatus { get; set; }
-
-    public static readonly HttpClient HttpClient;
-    public static readonly BotRepository BotRepository;
-    public static readonly MessageRepository MessageRepository;
-    public static readonly TargetRepository TargetRepository;
-    public static readonly UserRepository UserRepository;
-    public static readonly string ConnectionString;
-
-    static Globals()
-    {
-        string jsonString = File.ReadAllText("MysqlOption.json");
-        JObject json = JObject.Parse(jsonString);
-        var builder = new MySqlConnectionStringBuilder
-        {
-            Server = (string?)json["host"],
-            Database = (string?)json["database"],
-            UserID = (string?)json["user"],
-            Password = (string?)json["password"]
-        };
-        ConnectionString = builder.ConnectionString;
-
-        BotRepository = new BotRepository();
-        MessageRepository = new MessageRepository();
-        TargetRepository = new TargetRepository();
-        UserRepository = new UserRepository();
-        HttpClient = new HttpClient();
-    }
-
     public static Dictionary<string, string> EncWbi(Dictionary<string, string> parameters, string imgKey, string subKey)
     {
         string mixinKey = GetMixinKey(imgKey + subKey);
@@ -76,15 +43,15 @@ public static class Globals
         return MixinKeyEncTab.Aggregate("", (s, i) => s + orig[i])[..32];
     }
 
-    public static async Task<(string, string)> GetWbiKeys()
+    public static async Task<(string, string)> GetWbiKeysAsync()
     {
-        HttpResponseMessage responseMessage = await HttpClient.SendAsync(new HttpRequestMessage
+        HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
         {
             Method = HttpMethod.Get,
             RequestUri = new Uri("https://api.bilibili.com/x/web-interface/nav"),
         });
 
-        JObject response = JObject.Parse(await responseMessage.Content.ReadAsStringAsync())!;
+        JsonNode response = JsonNode.Parse(await responseMessage.Content.ReadAsStringAsync())!;
 
         string imgUrl = (string)response["data"]!["wbi_img"]!["img_url"]!;
         imgUrl = imgUrl.Split("/")[^1].Split(".")[0];
