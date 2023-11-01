@@ -140,7 +140,7 @@ public class MessageRepository : IMessageRepository
     {
         string sql =
             "insert into message_table(uid, target_uid, target_name, room_id, content, code, response, completed) values(@Uid, @TargetUid, @TargetName, @RoomId, @Content, @Code, @response, @Completed)";
-        var command = new CommandDefinition(sql, cancellationToken: cancellationToken);
+        var command = new CommandDefinition(sql, messageModel, cancellationToken: cancellationToken);
 
         await using var conn = new MySqlConnection(Globals.ConnectionString);
         await conn.ExecuteAsync(command);
