@@ -252,9 +252,9 @@ public partial class TargetService : ITargetService
                     throw new LittleHeartException(Reason.Ban);
                 }
 
-                payload["ets"] = (string?)response["data"]!["timestamp"];
+                payload["ets"] = response["data"]!["timestamp"]?.GetValue<long>().ToString();
                 payload["secret_key"] = (string?)response["data"]!["secret_key"];
-                payload["heartbeat_interval"] = (string?)response["data"]!["heartbeat_interval"];
+                payload["heartbeat_interval"] = response["data"]!["heartbeat_interval"]?.GetValue<long>().ToString();
                 payload["secret_rule"] = response["data"]!["secret_rule"]!.ToJsonString(_options);
             }, context);
         }
@@ -402,9 +402,9 @@ public partial class TargetService : ITargetService
                     throw new LittleHeartException(Reason.Ban);
                 }
 
-                payload["ets"] = (string?)response["data"]!["timestamp"];
+                payload["ets"] = response["data"]!["timestamp"]?.GetValue<long>().ToString();
                 payload["secret_key"] = (string?)response["data"]!["secret_key"];
-                payload["heartbeat_interval"] = (string?)response["data"]!["heartbeat_interval"];
+                payload["heartbeat_interval"] = response["data"]!["heartbeat_interval"]?.GetValue<long>().ToString();
                 JsonArray id = JsonNode.Parse(payload["id"]!)!.AsArray();
                 id[2] = (int?)id[2] + 1;
                 payload["id"] = id.ToJsonString(_options);

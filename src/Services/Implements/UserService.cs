@@ -128,6 +128,7 @@ public partial class UserService : IUserService
 
         //如果所有任务都完成了
         user.Completed = 1;
+        _logger.Information("uid {Uid} 今日的所有任务已完成", user.Uid);
         await _userRepository.SetCompletedAsync(user.Completed, user.Uid, cancellationToken);
     }
 

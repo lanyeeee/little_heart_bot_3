@@ -242,7 +242,7 @@ public class Bot
             }
 
             string? targetName = (string?)data["name"];
-            string? roomId = (string?)data["live_room"]!["roomid"];
+            string? roomId = data["live_room"]!["roomid"]?.GetValue<long>().ToString();
             bool targetExist = await _targetService.CheckExistByUidAndTargetUidAsync(uid, targetUid, cancellationToken);
 
             if (targetExist)
@@ -263,7 +263,8 @@ public class Bot
                 };
                 await _targetService.InsertAsync(targetEntity, cancellationToken);
 
-                bool messageExist = await _messageService.CheckExistByUidAndTargetUid(uid, targetUid, cancellationToken);
+                bool messageExist =
+                    await _messageService.CheckExistByUidAndTargetUid(uid, targetUid, cancellationToken);
                 if (messageExist)
                 {
                     await _messageService.SetCompletedByUidAndTargetUid(0, uid, targetUid, cancellationToken);
@@ -376,10 +377,12 @@ public class Bot
 
                 foreach (var target in targets)
                 {
-                    bool exist = await _targetService.CheckExistByUidAndTargetUidAsync(uid, target.TargetUid, cancellationToken);
+                    bool exist =
+                        await _targetService.CheckExistByUidAndTargetUidAsync(uid, target.TargetUid, cancellationToken);
                     if (exist)
                     {
-                        await _messageService.SetContentByUidAndTargetUid("飘过~", uid, target.TargetUid, cancellationToken);
+                        await _messageService.SetContentByUidAndTargetUid("飘过~", uid, target.TargetUid,
+                            cancellationToken);
                         await _messageService.SetCodeAndResponseByUidAndTargetUid(0, null, uid,
                             target.TargetUid, cancellationToken);
                     }
@@ -487,7 +490,9 @@ public class Bot
                 }
                 else
                 {
-                    string? content = await _userService.GetMessageConfigStringAsync(_users[uid], parameter.Trim(), cancellationToken);
+                    string? content =
+                        await _userService.GetMessageConfigStringAsync(_users[uid], parameter.Trim(),
+                            cancellationToken);
                     if (content == null)
                     {
                         return;
@@ -537,7 +542,8 @@ public class Bot
                 }
                 else
                 {
-                    string? content = await _userService.GetTargetConfigStringAsync(_users[uid], parameter.Trim(), cancellationToken);
+                    string? content =
+                        await _userService.GetTargetConfigStringAsync(_users[uid], parameter.Trim(), cancellationToken);
                     if (content == null)
                     {
                         return;
@@ -585,12 +591,16 @@ public class Bot
             }
 
             //忽略 已读的、bot发送的、非文字的 消息
-            if ((int?)msg["timestamp"] <= lastTimestamp || (string?)msg["sender_uid"] == _botModel.Uid ||
-                (int?)msg["msg_type"] != 1) continue;
+            if ((int?)msg["timestamp"] <= lastTimestamp ||
+                msg["sender_uid"]?.GetValue<long>().ToString() == _botModel.Uid ||
+                (int?)msg["msg_type"] != 1)
+            {
+                continue;
+            }
 
             try
             {
-                string? timestamp = (string?)msg["timestamp"];
+                string? timestamp = msg["timestamp"]?.GetValue<long>().ToString();
                 string? contentJson = (string?)msg["content"];
                 if (timestamp == null || contentJson == null)
                 {
@@ -644,7 +654,7 @@ public class Bot
                 continue;
             }
 
-            string? uid = (string?)session["talker_id"];
+            string? uid = session["talker_id"]?.GetValue<long>().ToString();
             if (uid == null)
             {
                 continue;
