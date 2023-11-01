@@ -128,7 +128,7 @@ public class TargetRepository : ITargetRepository
     {
         string sql =
             "insert into target_table(uid, target_uid, target_name, room_id, exp, watched_seconds, completed) values(@Uid, @TargetUid, @TargetName, @RoomId, @Exp, @WatchedSeconds, @Completed)";
-        var command = new CommandDefinition(sql, cancellationToken: cancellationToken);
+        var command = new CommandDefinition(sql, targetModel, cancellationToken: cancellationToken);
 
         await using var conn = new MySqlConnection(Globals.ConnectionString);
         await conn.ExecuteAsync(command);
