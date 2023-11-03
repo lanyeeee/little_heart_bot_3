@@ -246,7 +246,7 @@ public partial class MessageService : IMessageService
                 message.Uid,
                 message.TargetName);
         }
-        else if (message.Code == -412)
+        else if (message.Code == -412)//风控
         {
             _logger.ForContext("Response", response.ToJsonString(_options))
                 .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为风控",
@@ -254,13 +254,34 @@ public partial class MessageService : IMessageService
                     message.TargetName);
             throw new LittleHeartException(response.ToJsonString(_options), Reason.Ban);
         }
-        else if (message.Code is -111 or -101)
+        else if (message.Code is -111 or -101)//Cookie过期
         {
             _logger.ForContext("Response", response.ToJsonString(_options))
                 .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为Cookie过期",
                     message.Uid,
                     message.TargetName);
             throw new LittleHeartException(response.ToJsonString(_options), Reason.CookieExpired);
+        }
+        else if (message.Code == -403)//可能是等级墙，也可能是全体禁言
+        {
+            _logger.ForContext("Response", response.ToJsonString(_options))
+                .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为主播开启了禁言",
+                    message.Uid,
+                    message.TargetName);
+        }
+        else if (message.Code == 11000)//似乎跟Up主的身份有关系
+        {
+            _logger.ForContext("Response", response.ToJsonString(_options))
+                .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，原因未知",
+                    message.Uid,
+                    message.TargetName);
+        }
+        else if (message.Code == 10030)//发弹幕的频率过高
+        {
+            _logger.ForContext("Response", response.ToJsonString(_options))
+                .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为发送弹幕的频率过高",
+                    message.Uid,
+                    message.TargetName);
         }
         else
         {
