@@ -660,7 +660,11 @@ public class Bot
                 continue;
             }
 
-            JsonObject lastMsg = session["last_msg"]!.AsObject();
+            JsonObject? lastMsg = session["last_msg"]?.AsObject();
+            if (lastMsg == null)
+            {
+                continue;
+            }
 
             int? timestamp = lastMsg.Count != 0 ? (int?)lastMsg["timestamp"] : 0;
             if (timestamp == null)
