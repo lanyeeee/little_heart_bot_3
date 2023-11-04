@@ -330,7 +330,7 @@ public partial class TargetService : ITargetService
         return (string?)response["s"];
     }
 
-    private async Task PostXAsync(TargetModel target, string? cookie, Dictionary<string, string?> payload,
+    private async Task<bool> PostXAsync(TargetModel target, string? cookie, Dictionary<string, string?> payload,
         CancellationToken cancellationToken = default)
     {
         string ts = DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString();
@@ -354,7 +354,7 @@ public partial class TargetService : ITargetService
 
         try
         {
-            await _postXPipeline.ExecuteAsync(async ctx =>
+            return await _postXPipeline.ExecuteAsync(async ctx =>
             {
                 HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
                 {
@@ -373,17 +373,13 @@ public partial class TargetService : ITargetService
                 int? code = (int?)response["code"];
                 if (code == -504)
                 {
-#if DEBUG
-                    Console.WriteLine($"uid {target.Uid} 给 {target.TargetName} 发送X心跳包失败，服务器调用超时");
-#endif
                     _logger.ForContext("Response", response.ToJsonString(_options))
                         .Warning("uid {Uid} 给 {TargetName} 发送X心跳包失败，服务器调用超时",
                             target.Uid,
                             target.TargetName);
                     throw new LittleHeartException(Reason.ServerTimeout);
                 }
-
-                if (code == 1012002)
+                else if (code == 1012002)
                 {
                     //TODO: 已经忘了是什么错误了，以后需要记录，所以即使是预料之内的错误也定级为Error
                     _logger.ForContext("Response", response.ToJsonString(_options))
@@ -391,7 +387,14 @@ public partial class TargetService : ITargetService
                             target.TargetUid,
                             target.TargetName);
                 }
-
+                else if (code == 1012003)
+                {
+                    _logger.ForContext("Response", response.ToJsonString(_options))
+                        .Warning("uid {Uid} 给 {TargetName} 发送X心跳包失败，时间戳错误",
+                            target.Uid,
+                            target.TargetName);
+                    return false;
+                }
                 if (code != 0)
                 {
                     //TODO: 以后需要记录风控的code，专门处理
@@ -408,6 +411,7 @@ public partial class TargetService : ITargetService
                 JsonArray id = JsonNode.Parse(payload["id"]!)!.AsArray();
                 id[2] = (int?)id[2] + 1;
                 payload["id"] = id.ToJsonString(_options);
+                return true;
             }, context);
         }
         catch (LittleHeartException ex)
@@ -443,6 +447,7 @@ public partial class TargetService : ITargetService
             _logger.Fatal(ex, "uid {Uid} 给 {TargetName} 发送X心跳包时发生意料之外的异常",
                 target.TargetUid,
                 target.TargetName);
+            return false;
         }
         finally
         {
@@ -573,7 +578,15 @@ public partial class TargetService : ITargetService
 
         while (true)
         {
-            await PostXAsync(target, cookie, payload, cancellationToken);
+            bool postXSuccess = await PostXAsync(target, cookie, payload, cancellationToken);
+            if (!postXSuccess)
+            {
+                _logger.Verbose("因为 uid {Uid} 给 {TargetName} 发送X心跳包失败，停止继续发包，当前观看时长 {WatchedSeconds} 秒",
+                    target.Uid,
+                    target.TargetName,
+                    target.WatchedSeconds);
+                return;
+            }
 
             interval = int.Parse(payload["heartbeat_interval"]!);
             target.WatchedSeconds += interval;
