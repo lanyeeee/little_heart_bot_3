@@ -85,51 +85,60 @@ public partial class UserService : IUserService
                 continue; //已完成的任务就跳过
             }
 
-            try
-            {
-                tasks.Add(_targetService.StartAsync(target, user.Cookie, user.Csrf, cancellationToken));
-                _logger.Verbose("uid {Uid} 开始观看 {TargetName} 的直播",
-                    user.Uid, target.TargetName);
+            tasks.Add(_targetService.StartAsync(target, user.Cookie, user.Csrf, cancellationToken));
+            _logger.Verbose("uid {Uid} 开始观看 {TargetName} 的直播",
+                user.Uid, target.TargetName);
 
-                await Task.Delay(500, cancellationToken);
+            await Task.Delay(500, cancellationToken);
 
-                selectedCount++;
-                if (selectedCount >= maxCountPerRound)
-                {
-                    break;
-                }
-            }
-            catch (LittleHeartException ex)
+            selectedCount++;
+            if (selectedCount >= maxCountPerRound)
             {
-                switch (ex.Reason)
-                {
-                    case Reason.CookieExpired:
-                        _logger.Warning("uid {Uid} 的cookie已过期", target.Uid);
-                        await MarkCookieError(target.Uid, cancellationToken);
-                        //Cookie过期，不用再看，直接返回，这个task正常结束
-                        return;
-                    case Reason.Ban:
-                        //风控，抛出异常，由上层通过cancellationTokenSource.Cancel()来结束其他task
-                        throw;
-                }
+                break;
             }
         }
 
-        _logger.Information("uid {Uid} 正在观看直播，目前同时观看 {selectedCount} 个目标", user.Uid, selectedCount);
+        _logger.Information("uid {Uid} 正在观看直播，目前同时观看 {SelectedCount} 个目标", user.Uid, selectedCount);
 
-        //TODO: 这样即使有某个task出错了，也要等待所有task完成，这是不合理的
-        await Task.WhenAll(tasks);
-
-        //如果有任何一个任务未完成
-        if (user.Targets.Any(t => t.Completed != 1))
+        try
         {
-            return;
-        }
+            while (tasks.Count != 0)
+            {
+                var completedTask = await Task.WhenAny(tasks);
+                if (completedTask.Exception != null)
+                {
+                    throw completedTask.Exception;
+                }
 
-        //如果所有任务都完成了
-        user.Completed = 1;
-        _logger.Information("uid {Uid} 今日的所有任务已完成", user.Uid);
-        await _userRepository.SetCompletedAsync(user.Completed, user.Uid, cancellationToken);
+                tasks.Remove(completedTask);
+            }
+
+            //如果有任何一个任务未完成
+            if (user.Targets.Any(t => t.Completed != 1))
+            {
+                return;
+            }
+
+
+            //如果所有任务都完成了
+            user.Completed = 1;
+            _logger.Information("uid {Uid} 今日的所有任务已完成", user.Uid);
+            await _userRepository.SetCompletedAsync(user.Completed, user.Uid, cancellationToken);
+        }
+        catch (LittleHeartException ex)
+        {
+            switch (ex.Reason)
+            {
+                case Reason.CookieExpired:
+                    _logger.Warning("uid {Uid} 的cookie已过期", user.Uid);
+                    await MarkCookieError(user.Uid, cancellationToken);
+                    //Cookie过期，不用再看，直接返回，这个task正常结束
+                    return;
+                case Reason.Ban:
+                    //风控，抛出异常，由上层通过cancellationTokenSource.Cancel()来结束其他task
+                    throw;
+            }
+        }
     }
 
     public string? GetConfigString(UserModel user)
