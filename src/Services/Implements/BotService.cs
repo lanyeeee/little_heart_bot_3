@@ -19,6 +19,7 @@ public partial class BotService : IBotService
     private readonly ResiliencePipeline _getSessionListPipeline;
     private readonly ResiliencePipeline _updateSignPipeline;
     private readonly ResiliencePipeline _getMessagePipeline;
+    private readonly ResiliencePipeline _sendMessagePipeline;
 
 
     public BotService(Logger logger, IBotRepository botRepository)
@@ -79,8 +80,30 @@ public partial class BotService : IBotService
                 MaxRetryAttempts = 5,
                 OnRetry = args =>
                 {
+                    var user = args.Context.Properties.GetValue(LittleHeartResilienceKeys.User, null)!;
                     _logger.Warning(args.Outcome.Exception,
-                        "更新签名时遇到异常，准备在 {RetryDelay} 秒后进行第 {AttemptNumber} 次重试",
+                        "获取与uid {Uid} 的聊天记录时遇到异常，准备在 {RetryDelay} 秒后进行第 {AttemptNumber} 次重试",
+                        user.Uid,
+                        args.RetryDelay.TotalSeconds,
+                        args.AttemptNumber);
+                    return default;
+                }
+            })
+            .Build();
+
+        _sendMessagePipeline = new ResiliencePipelineBuilder()
+            .AddRetry(new RetryStrategyOptions
+            {
+                ShouldHandle = new PredicateBuilder()
+                    .Handle<LittleHeartException>(ex => ex.Reason == Reason.NullResponse)
+                    .Handle<HttpRequestException>(),
+                Delay = TimeSpan.FromSeconds(1),
+                BackoffType = DelayBackoffType.Exponential,
+                MaxRetryAttempts = 5,
+                OnRetry = args =>
+                {
+                    _logger.Warning(args.Outcome.Exception,
+                        "发送私信时遇到异常，准备在 {RetryDelay} 秒后进行第 {AttemptNumber} 次重试",
                         args.RetryDelay.TotalSeconds,
                         args.AttemptNumber);
                     return default;
@@ -299,43 +322,82 @@ public partial class BotService : IBotService
     public async Task<bool> SendMessageAsync(BotModel bot, string content, string targetUid,
         CancellationToken cancellationToken = default)
     {
-        var payload = new Dictionary<string, string?>
+        try
         {
-            { "msg[sender_uid]", bot.Uid },
-            { "msg[receiver_id]", targetUid },
-            { "msg[receiver_type]", "1" },
-            { "msg[msg_type]", "1" },
-            { "msg[dev_id]", bot.DevId },
-            { "msg[timestamp]", DateTimeOffset.Now.ToUnixTimeSeconds().ToString() },
-            { "msg[content]", new JsonObject { { "content", content } }.ToJsonString(_options) },
-            { "csrf", bot.Csrf }
-        };
-        HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
-        {
-            Method = HttpMethod.Post,
-            RequestUri = new Uri("https://api.vc.bilibili.com/web_im/v1/web_im/send_msg"),
-            Headers = { { "Cookie", bot.Cookie } },
-            Content = new FormUrlEncodedContent(payload)
-        }, cancellationToken);
-        await Task.Delay(1000, cancellationToken);
-        JsonNode? response = JsonNode.Parse(await responseMessage.Content.ReadAsStringAsync(cancellationToken));
-        if (response == null)
-        {
-            throw new LittleHeartException(Reason.NullResponse);
+            return await _sendMessagePipeline.ExecuteAsync(async token =>
+            {
+                var payload = new Dictionary<string, string?>
+                {
+                    { "msg[sender_uid]", bot.Uid },
+                    { "msg[receiver_id]", targetUid },
+                    { "msg[receiver_type]", "1" },
+                    { "msg[msg_type]", "1" },
+                    { "msg[dev_id]", bot.DevId },
+                    { "msg[timestamp]", DateTimeOffset.Now.ToUnixTimeSeconds().ToString() },
+                    { "msg[content]", new JsonObject { { "content", content } }.ToJsonString(_options) },
+                    { "csrf", bot.Csrf }
+                };
+                HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+                {
+                    Method = HttpMethod.Post,
+                    RequestUri = new Uri("https://api.vc.bilibili.com/web_im/v1/web_im/send_msg"),
+                    Headers = { { "Cookie", bot.Cookie } },
+                    Content = new FormUrlEncodedContent(payload)
+                }, cancellationToken);
+                await Task.Delay(1000, cancellationToken);
+                JsonNode? response = JsonNode.Parse(await responseMessage.Content.ReadAsStringAsync(cancellationToken));
+                if (response == null)
+                {
+                    throw new LittleHeartException(Reason.NullResponse);
+                }
+
+                int? code = (int?)response["code"];
+                //TODO: 后续还要记录 1.私信到达上限 2.cookie过期 3.风控 的code
+                if (code != 0)
+                {
+                    _logger.ForContext("Response", response.ToJsonString(_options))
+                        .Error("给uid {targetUid} 发送私信失败",
+                            targetUid);
+
+                    return false;
+                }
+
+                return true;
+            }, cancellationToken);
         }
-
-        int code = (int)response["code"]!;
-
-        if (code != 0)
+        catch (LittleHeartException ex)
         {
-            _logger.ForContext("Response", response.ToJsonString(_options))
-                .Error("给 {targetUid} 发送私信失败",
-                    targetUid);
-
+            switch (ex.Reason)
+            {
+                case Reason.Ban:
+                case Reason.CookieExpired:
+                    throw;
+                case Reason.NullResponse:
+                    _logger.Error("给uid {Uid} 发送私信时出现 NullResponse 异常，重试多次后依然失败，私信的内容为:{Content}",
+                        targetUid,
+                        content);
+                    ex.Reason = Reason.Ban;
+                    throw;
+                default:
+                    _logger.Fatal("如果出现这个错误，说明代码编写有问题");
+                    throw;
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.Error(ex, "给uid {Uid} 发送私信时出现 HttpRequestException 异常，重试多次后依然失败，私信的内容为:{Content}",
+                targetUid,
+                content);
+            throw new LittleHeartException(Reason.Ban);
+        }
+        catch (Exception ex)
+        {
+            _logger.Fatal(ex,
+                "给uid {Uid} 发送私信时出现预料之外的错误，今日停止发送私信，私信的内容为:{Content}",
+                targetUid,
+                content);
             return false;
         }
-
-        return true;
     }
 
     private bool ShouldUpdateSign(BotModel bot)

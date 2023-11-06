@@ -203,11 +203,10 @@ public class Bot
 
     private async Task SendMessageAsync(string content, string userUid, CancellationToken cancellationToken = default)
     {
-        //TODO: SendMessageAsync 会抛出异常，需要处理
         _talking = await _botService.SendMessageAsync(_botModel, content, userUid, cancellationToken);
         if (_talking == false)
         {
-            _logger.Error("今日私信发送数量已达上限，共发送了 {talkNum} 条私信", _talkNum);
+            _logger.Warning("今日停止发送私信，今日共发送了 {talkNum} 条私信", _talkNum);
             return;
         }
 
