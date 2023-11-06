@@ -188,13 +188,20 @@ public class App
 
         foreach (var user in users)
         {
-            //TODO: 需要异常处理，会抛出Ban异常，这时候需要取消其他task
             tasks.Add(_userService.SendMessageAsync(user, cancellationToken));
             await Task.Delay(100, cancellationToken);
         }
 
-        //TODO: 这样即使有某个task出错了，也要等待所有task完成，这是不合理的
-        await Task.WhenAll(tasks);
+        while (tasks.Count != 0)
+        {
+            Task finishedTask = await Task.WhenAny(tasks);
+            if (finishedTask.Exception != null)
+            {
+                throw finishedTask.Exception;
+            }
+
+            tasks.Remove(finishedTask);
+        }
     }
 
     private async Task WatchLiveAsync(List<UserModel> users, CancellationToken cancellationToken)
@@ -202,12 +209,19 @@ public class App
         var tasks = new List<Task>();
         foreach (var user in users)
         {
-            //TODO: 需要异常处理，会抛出Ban异常，这时候需要取消其他task
             tasks.Add(_userService.WatchLiveAsync(user, cancellationToken));
             await Task.Delay(2000, cancellationToken);
         }
 
-        //TODO: 这样即使有某个task出错了，也要等待所有task完成，这是不合理的
-        await Task.WhenAll(tasks);
+        while (tasks.Count != 0)
+        {
+            Task finishedTask = await Task.WhenAny(tasks);
+            if (finishedTask.Exception != null)
+            {
+                throw finishedTask.Exception;
+            }
+
+            tasks.Remove(finishedTask);
+        }
     }
 }

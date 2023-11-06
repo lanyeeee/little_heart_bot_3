@@ -104,13 +104,13 @@ public partial class UserService : IUserService
         {
             while (tasks.Count != 0)
             {
-                var completedTask = await Task.WhenAny(tasks);
-                if (completedTask.Exception != null)
+                var finishedTask = await Task.WhenAny(tasks);
+                if (finishedTask.Exception != null)
                 {
-                    throw completedTask.Exception;
+                    throw finishedTask.Exception;
                 }
 
-                tasks.Remove(completedTask);
+                tasks.Remove(finishedTask);
             }
 
             //如果有任何一个任务未完成
