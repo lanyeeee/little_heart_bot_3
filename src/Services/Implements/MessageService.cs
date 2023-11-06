@@ -283,6 +283,20 @@ public partial class MessageService : IMessageService
                     message.Uid,
                     message.TargetName);
         }
+        else if (message.Code == 10023)//用户已将主播拉黑
+        {
+            _logger.ForContext("Response", response.ToJsonString(_options))
+                .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为用户已将主播拉黑",
+                    message.Uid,
+                    message.TargetName);
+        }
+        else if (message.Code == 1003)//用户已在本房间被禁言
+        {
+            _logger.ForContext("Response", response.ToJsonString(_options))
+                .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为用户已在本房间被禁言",
+                    message.Uid,
+                    message.TargetName);
+        }
         else
         {
             _logger.ForContext("Response", response.ToJsonString(_options))
