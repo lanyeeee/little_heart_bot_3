@@ -44,7 +44,7 @@ public static class Program
             .WriteTo.File(
                 path: "logs/bot/bot-.txt",
                 rollingInterval: RollingInterval.Day,
-                fileSizeLimitBytes: 1024 * 1024,
+                fileSizeLimitBytes: 1 * 1024 * 1024,
                 rollOnFileSizeLimit: true,
                 buffered: true,
                 flushToDiskInterval: TimeSpan.FromSeconds(10),
@@ -57,7 +57,7 @@ public static class Program
             .WriteTo.File(
                 path: "logs/app/app-.txt",
                 rollingInterval: RollingInterval.Day,
-                fileSizeLimitBytes: 1024 * 1024,
+                fileSizeLimitBytes: 2 * 1024 * 1024,
                 rollOnFileSizeLimit: true,
                 buffered: true,
                 flushToDiskInterval: TimeSpan.FromSeconds(1),
