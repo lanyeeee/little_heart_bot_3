@@ -68,7 +68,7 @@ public class Bot
 
                 //这两个task是死循环，如果结束了只有可能是抛了Ban或者CookieExpired的异常
                 var completedTask = await Task.WhenAny(updateSignTask, handleMessageTask);
-                throw completedTask.Exception!;
+                await completedTask;
             }
             catch (LittleHeartException ex)
             {

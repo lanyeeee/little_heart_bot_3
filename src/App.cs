@@ -195,12 +195,9 @@ public class App
         while (tasks.Count != 0)
         {
             Task finishedTask = await Task.WhenAny(tasks);
-            if (finishedTask.Exception != null)
-            {
-                throw finishedTask.Exception;
-            }
-
             tasks.Remove(finishedTask);
+
+            await finishedTask;
         }
     }
 
@@ -216,12 +213,9 @@ public class App
         while (tasks.Count != 0)
         {
             Task finishedTask = await Task.WhenAny(tasks);
-            if (finishedTask.Exception != null)
-            {
-                throw finishedTask.Exception;
-            }
-
             tasks.Remove(finishedTask);
+
+            await finishedTask;
         }
     }
 }
