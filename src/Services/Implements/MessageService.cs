@@ -118,6 +118,10 @@ public partial class MessageService : IMessageService
                 message.TargetName);
             throw new LittleHeartException(Reason.Ban);
         }
+        catch (TaskCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.Fatal(ex, "uid {Uid} 给 {TargetName} 发送消息时出现预料之外的错误",
@@ -213,6 +217,10 @@ public partial class MessageService : IMessageService
                 message.Uid,
                 message.TargetName);
             throw new LittleHeartException(Reason.Ban);
+        }
+        catch (TaskCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

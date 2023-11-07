@@ -96,6 +96,9 @@ public class Bot
                         break;
                 }
             }
+            catch (TaskCanceledException)
+            {
+            }
             catch (Exception ex)
             {
                 _logger.Fatal(ex, "遇到了意料之外的错误");

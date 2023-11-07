@@ -158,6 +158,10 @@ public partial class BotService : IBotService
                 "获取 session_list 时遇到 HttpRequestException 异常，重试多次后依然失败");
             throw new LittleHeartException(Reason.Ban);
         }
+        catch (TaskCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.Fatal(ex,
@@ -230,6 +234,10 @@ public partial class BotService : IBotService
                 "获取uid {Uid} 的聊天记录时遇到 HttpRequestException 异常，重试多次后依然失败",
                 user.Uid);
             throw new LittleHeartException(Reason.Ban);
+        }
+        catch (TaskCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -313,6 +321,10 @@ public partial class BotService : IBotService
                 "小心心bot更新签名时出现 HttpRequestException 异常，重试多次后依然失败");
             throw new LittleHeartException(Reason.Ban);
         }
+        catch (TaskCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.Fatal(ex, "小心心bot更新签名时出现预料之外的错误");
@@ -389,6 +401,10 @@ public partial class BotService : IBotService
                 targetUid,
                 content);
             throw new LittleHeartException(Reason.Ban);
+        }
+        catch (TaskCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
