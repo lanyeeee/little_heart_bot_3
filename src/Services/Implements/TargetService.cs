@@ -280,6 +280,10 @@ public partial class TargetService : ITargetService
                 target.TargetName);
             throw new LittleHeartException(Reason.Ban);
         }
+        catch (TaskCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.Fatal(ex, "uid {Uid} 给 {TargetName} 发送E心跳包时发生意料之外的异常",
@@ -395,6 +399,7 @@ public partial class TargetService : ITargetService
                             target.TargetName);
                     return false;
                 }
+
                 if (code != 0)
                 {
                     //TODO: 以后需要记录风控的code，专门处理
@@ -441,6 +446,10 @@ public partial class TargetService : ITargetService
                 target.Uid,
                 target.TargetName);
             throw new LittleHeartException(Reason.Ban);
+        }
+        catch (TaskCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -549,6 +558,10 @@ public partial class TargetService : ITargetService
                 target.Uid,
                 target.TargetName);
             throw new LittleHeartException(Reason.Ban);
+        }
+        catch (TaskCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
