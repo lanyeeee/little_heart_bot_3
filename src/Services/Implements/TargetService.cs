@@ -610,17 +610,34 @@ public partial class TargetService : ITargetService
                 target.TargetName,
                 target.WatchedSeconds);
 
-            //每隔5分钟检查一次是否完成，完成则返回
-            if (target.WatchedSeconds % 300 == 0 && IsCompleted(target))
+
+            //每隔5分钟检查一次是否完成
+            if (target.WatchedSeconds % 300 == 0)
             {
-                _logger.Information("uid {Uid} 在 {TargetName} 的任务完成，观看时长 {WatchedSeconds} 秒，获得经验 {Exp}",
-                    target.Uid,
-                    target.TargetName,
-                    target.WatchedSeconds,
-                    target.Exp);
-                target.Completed = 1;
-                await SetCompletedAsync(target.Completed, target.Id, cancellationToken);
-                return;
+                //先获取经验
+                int? exp = await GetExpAsync(target, cookie, cancellationToken);
+                if (exp == null)
+                {
+                    //出现了意料之外的错误，直接标记为已完成
+                    target.Completed = 1;
+                    await SetCompletedAsync(target.Completed, target.Id, cancellationToken);
+                    return;
+                }
+
+                target.Exp = exp.Value;
+                await SetExpAsync(target.Exp, target.Id, cancellationToken);
+                //再根据经验和观看时长判断是否完成
+                if (IsCompleted(target))
+                {
+                    _logger.Information("uid {Uid} 在 {TargetName} 的任务完成，观看时长 {WatchedSeconds} 秒，获得经验 {Exp}",
+                        target.Uid,
+                        target.TargetName,
+                        target.WatchedSeconds,
+                        target.Exp);
+                    target.Completed = 1;
+                    await SetCompletedAsync(target.Completed, target.Id, cancellationToken);
+                    return;
+                }
             }
 
             await Task.Delay(interval * 1000, cancellationToken);
