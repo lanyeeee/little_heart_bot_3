@@ -337,27 +337,27 @@ public partial class TargetService : ITargetService
     private async Task<bool> PostXAsync(TargetModel target, string? cookie, Dictionary<string, string?> payload,
         CancellationToken cancellationToken = default)
     {
-        string ts = DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString();
-        var xPayload = new Dictionary<string, string?>
-        {
-            { "s", await GenerateSAsync(payload, ts, cancellationToken) },
-            { "id", payload["id"] },
-            { "device", payload["device"] },
-            { "ets", payload["ets"] },
-            { "benchmark", payload["secret_key"] },
-            { "time", payload["heartbeat_interval"] },
-            { "ts", ts },
-            { "ua", payload["ua"] },
-            { "csrf_token", payload["csrf"] },
-            { "csrf", payload["csrf"] },
-            { "visit_id", "" }
-        };
-
         var context = ResilienceContextPool.Shared.Get(cancellationToken);
         context.Properties.Set(LittleHeartResilienceKeys.Target, target);
 
         try
         {
+            string ts = DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString();
+            var xPayload = new Dictionary<string, string?>
+            {
+                { "s", await GenerateSAsync(payload, ts, cancellationToken) },
+                { "id", payload["id"] },
+                { "device", payload["device"] },
+                { "ets", payload["ets"] },
+                { "benchmark", payload["secret_key"] },
+                { "time", payload["heartbeat_interval"] },
+                { "ts", ts },
+                { "ua", payload["ua"] },
+                { "csrf_token", payload["csrf"] },
+                { "csrf", payload["csrf"] },
+                { "visit_id", "" }
+            };
+
             return await _postXPipeline.ExecuteAsync(async ctx =>
             {
                 HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
