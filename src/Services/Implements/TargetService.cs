@@ -451,6 +451,13 @@ public partial class TargetService : ITargetService
         {
             throw;
         }
+        catch (JsonException ex)
+        {
+            _logger.Error(ex, "uid {Uid} 给 {TargetName} 发送X心跳包时发生 Json 异常",
+                target.TargetUid,
+                target.TargetName);
+            return false;
+        }
         catch (Exception ex)
         {
             _logger.Fatal(ex, "uid {Uid} 给 {TargetName} 发送X心跳包时发生意料之外的异常",
