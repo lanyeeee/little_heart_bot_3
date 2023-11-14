@@ -339,27 +339,26 @@ public partial class TargetService : ITargetService
     {
         var context = ResilienceContextPool.Shared.Get(cancellationToken);
         context.Properties.Set(LittleHeartResilienceKeys.Target, target);
-
         try
         {
-            string ts = DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString();
-            var xPayload = new Dictionary<string, string?>
-            {
-                { "s", await GenerateSAsync(payload, ts, cancellationToken) },
-                { "id", payload["id"] },
-                { "device", payload["device"] },
-                { "ets", payload["ets"] },
-                { "benchmark", payload["secret_key"] },
-                { "time", payload["heartbeat_interval"] },
-                { "ts", ts },
-                { "ua", payload["ua"] },
-                { "csrf_token", payload["csrf"] },
-                { "csrf", payload["csrf"] },
-                { "visit_id", "" }
-            };
-
             return await _postXPipeline.ExecuteAsync(async ctx =>
             {
+                string ts = DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString();
+                var xPayload = new Dictionary<string, string?>
+                {
+                    { "s", await GenerateSAsync(payload, ts, cancellationToken) },
+                    { "id", payload["id"] },
+                    { "device", payload["device"] },
+                    { "ets", payload["ets"] },
+                    { "benchmark", payload["secret_key"] },
+                    { "time", payload["heartbeat_interval"] },
+                    { "ts", ts },
+                    { "ua", payload["ua"] },
+                    { "csrf_token", payload["csrf"] },
+                    { "csrf", payload["csrf"] },
+                    { "visit_id", "" }
+                };
+                
                 HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
                 {
                     Method = HttpMethod.Post,
