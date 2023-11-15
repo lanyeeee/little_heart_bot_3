@@ -305,6 +305,13 @@ public partial class MessageService : IMessageService
                     message.Uid,
                     message.TargetName);
         }
+        else if (message.Code == 10024)//因主播隐私设置，暂无法发送弹幕
+        {
+            _logger.ForContext("Response", response.ToJsonString(_options))
+                .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为主播隐私设置，暂无法发送弹幕",
+                    message.Uid,
+                    message.TargetName);
+        }
         else
         {
             _logger.ForContext("Response", response.ToJsonString(_options))
