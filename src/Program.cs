@@ -1,11 +1,9 @@
-﻿using System.Text.Json.Nodes;
-using Dapper;
+﻿using System.Text.Encodings.Web;
+using System.Text.Json;
+using little_heart_bot_3.Data;
 using little_heart_bot_3.Others;
-using little_heart_bot_3.Repositories;
-using little_heart_bot_3.Repositories.Implements;
 using little_heart_bot_3.Services;
 using Microsoft.Extensions.DependencyInjection;
-using MySqlConnector;
 using Serilog;
 using Serilog.Core;
 using Serilog.Enrichers.WithCaller;
@@ -18,8 +16,6 @@ public static class Program
 {
     public static async Task Main(string[] args)
     {
-        DefaultTypeMap.MatchNamesWithUnderscores = true;
-
 #if DEBUG
         await Test();
 #endif
@@ -37,6 +33,12 @@ public static class Program
     public static ServiceProvider ConfigService()
     {
         var services = new ServiceCollection();
+
+        services.AddSingleton<HttpClient>();
+        services.AddSingleton<JsonSerializerOptions>(_ => new JsonSerializerOptions
+        {
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        });
 
         var logFormatter = new ExpressionTemplate("{ {ts:@t, template:@mt, msg:@m, level:@l, ex:@x, p:{..@p}} }\n");
         services.AddKeyedSingleton<Logger>("bot:Logger", (_, _) => new LoggerConfiguration()
@@ -65,41 +67,24 @@ public static class Program
             .Enrich.WithCaller(true)
             .CreateLogger());
 
-        services.AddTransient<IBotRepository, BotRepository>();
-        services.AddTransient<IMessageRepository, MessageRepository>();
-        services.AddTransient<ITargetRepository, TargetRepository>();
-        services.AddTransient<IUserRepository, UserRepository>();
+        services.AddScoped<LittleHeartDbContext>();
 
         //BotService
-        services.AddKeyedTransient<IBotService, Services.Implements.Bot.BotService>("bot:BotService");
-        services.AddKeyedTransient<IBotService, Services.Implements.App.BotService>("app:BotService");
+        services.AddKeyedScoped<IBotService, Services.Implements.Bot.BotService>("bot:BotService");
+        services.AddKeyedScoped<IBotService, Services.Implements.App.BotService>("app:BotService");
         //MessageService
-        services.AddKeyedTransient<IMessageService, Services.Implements.Bot.MessageService>("bot:MessageService");
-        services.AddKeyedTransient<IMessageService, Services.Implements.App.MessageService>("app:MessageService");
+        services.AddKeyedScoped<IMessageService, Services.Implements.Bot.MessageService>("bot:MessageService");
+        services.AddKeyedScoped<IMessageService, Services.Implements.App.MessageService>("app:MessageService");
         //TargetService
-        services.AddKeyedTransient<ITargetService, Services.Implements.Bot.TargetService>("bot:TargetService");
-        services.AddKeyedTransient<ITargetService, Services.Implements.App.TargetService>("app:TargetService");
+        services.AddKeyedScoped<ITargetService, Services.Implements.Bot.TargetService>("bot:TargetService");
+        services.AddKeyedScoped<ITargetService, Services.Implements.App.TargetService>("app:TargetService");
         //UserService
-        services.AddKeyedTransient<IUserService, Services.Implements.Bot.UserService>("bot:UserService");
-        services.AddKeyedTransient<IUserService, Services.Implements.App.UserService>("app:UserService");
+        services.AddKeyedScoped<IUserService, Services.Implements.Bot.UserService>("bot:UserService");
+        services.AddKeyedScoped<IUserService, Services.Implements.App.UserService>("app:UserService");
 
         services.AddSingleton<Bot>();
         services.AddSingleton<App>();
 
         return services.BuildServiceProvider();
-    }
-
-    public static string GetMysqlConnectionString()
-    {
-        var jsonString = File.ReadAllText("MysqlOption.json");
-        JsonNode json = JsonNode.Parse(jsonString)!;
-        var builder = new MySqlConnectionStringBuilder
-        {
-            Server = (string?)json["host"],
-            Database = (string?)json["database"],
-            UserID = (string?)json["user"],
-            Password = (string?)json["password"]
-        };
-        return builder.ConnectionString;
     }
 }

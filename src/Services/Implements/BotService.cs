@@ -1,20 +1,20 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Nodes;
-using little_heart_bot_3.Models;
+using little_heart_bot_3.Data;
+using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
-using little_heart_bot_3.Repositories;
 using Polly;
 using Polly.Retry;
 using Serilog.Core;
 
 namespace little_heart_bot_3.Services.Implements;
 
-public partial class BotService : IBotService
+public class BotService : IBotService
 {
     private readonly Logger _logger;
-    private readonly IBotRepository _botRepository;
-
+    private readonly LittleHeartDbContext _db;
     private readonly JsonSerializerOptions _options;
+    private readonly HttpClient _httpClient;
 
     private readonly ResiliencePipeline _getSessionListPipeline;
     private readonly ResiliencePipeline _updateSignPipeline;
@@ -22,12 +22,18 @@ public partial class BotService : IBotService
     private readonly ResiliencePipeline _sendMessagePipeline;
 
 
-    public BotService(Logger logger, IBotRepository botRepository)
+    #region Public
+
+    public BotService(Logger logger,
+        LittleHeartDbContext db,
+        JsonSerializerOptions options,
+        HttpClient httpClient)
     {
         _logger = logger;
-        _botRepository = botRepository;
+        _db = db;
 
-        _options = Globals.JsonSerializerOptions;
+        _options = options;
+        _httpClient = httpClient;
 
         _getSessionListPipeline = new ResiliencePipelineBuilder()
             .AddRetry(new RetryStrategyOptions
@@ -183,7 +189,7 @@ public partial class BotService : IBotService
         {
             return await _getMessagePipeline.ExecuteAsync(async ctx =>
             {
-                HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+                HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
                 {
                     Method = HttpMethod.Get,
                     RequestUri = uri,
@@ -272,7 +278,7 @@ public partial class BotService : IBotService
         {
             await _updateSignPipeline.ExecuteAsync(async token =>
             {
-                HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+                HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
                 {
                     Method = HttpMethod.Post,
                     RequestUri = new Uri("https://api.bilibili.com/x/member/web/sign/update"),
@@ -331,17 +337,17 @@ public partial class BotService : IBotService
         }
     }
 
-    public async Task<bool> SendMessageAsync(BotModel bot, string content, string targetUid,
+    public async Task<bool> SendMessageAsync(BotModel bot, string content, UserModel user,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            return await _sendMessagePipeline.ExecuteAsync(async token =>
+            return await _sendMessagePipeline.ExecuteAsync(async _ =>
             {
                 var payload = new Dictionary<string, string?>
                 {
-                    { "msg[sender_uid]", bot.Uid },
-                    { "msg[receiver_id]", targetUid },
+                    { "msg[sender_uid]", bot.Uid.ToString() },
+                    { "msg[receiver_id]", user.Uid.ToString() },
                     { "msg[receiver_type]", "1" },
                     { "msg[msg_type]", "1" },
                     { "msg[dev_id]", bot.DevId },
@@ -349,7 +355,7 @@ public partial class BotService : IBotService
                     { "msg[content]", new JsonObject { { "content", content } }.ToJsonString(_options) },
                     { "csrf", bot.Csrf }
                 };
-                HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+                HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
                 {
                     Method = HttpMethod.Post,
                     RequestUri = new Uri("https://api.vc.bilibili.com/web_im/v1/web_im/send_msg"),
@@ -368,8 +374,8 @@ public partial class BotService : IBotService
                 if (code != 0)
                 {
                     _logger.ForContext("Response", response.ToJsonString(_options))
-                        .Error("给uid {targetUid} 发送私信失败",
-                            targetUid);
+                        .Error("给uid {Uid} 发送私信失败",
+                            user.Uid);
 
                     return false;
                 }
@@ -386,7 +392,7 @@ public partial class BotService : IBotService
                     throw;
                 case Reason.NullResponse:
                     _logger.Error("给uid {Uid} 发送私信时出现 NullResponse 异常，重试多次后依然失败，私信的内容为:{Content}",
-                        targetUid,
+                        user.Uid,
                         content);
                     ex.Reason = Reason.Ban;
                     throw;
@@ -398,7 +404,7 @@ public partial class BotService : IBotService
         catch (HttpRequestException ex)
         {
             _logger.Error(ex, "给uid {Uid} 发送私信时出现 HttpRequestException 异常，重试多次后依然失败，私信的内容为:{Content}",
-                targetUid,
+                user.Uid,
                 content);
             throw new LittleHeartException(Reason.Ban);
         }
@@ -410,11 +416,15 @@ public partial class BotService : IBotService
         {
             _logger.Fatal(ex,
                 "给uid {Uid} 发送私信时出现预料之外的错误，今日停止发送私信，私信的内容为:{Content}",
-                targetUid,
+                user.Uid,
                 content);
             return false;
         }
     }
+
+    #endregion
+
+    #region Private
 
     private bool ShouldUpdateSign(BotModel bot)
     {
@@ -427,40 +437,42 @@ public partial class BotService : IBotService
     private string MakeSign()
     {
         string sign = "给你【";
-        if (Globals.AppStatus == 0)
+        switch (Globals.AppStatus)
         {
-            sign += "弹幕、点赞、观看直播正常";
-        }
-        else if (Globals.AppStatus == -1)
-        {
-            sign += "弹幕、点赞、观看直播冷却中";
-        }
-
-        sign += "，";
-
-
-        if (Globals.ReceiveStatus == 0)
-        {
-            sign += "接收私信正常";
-        }
-        else if (Globals.ReceiveStatus == -1)
-        {
-            sign += "接收私信冷却中";
+            case AppStatus.Normal:
+                sign += "弹幕、点赞、观看直播正常";
+                break;
+            case AppStatus.Cooling:
+                sign += "弹幕、点赞、观看直播冷却中";
+                break;
         }
 
         sign += "，";
 
-        if (Globals.SendStatus == 0)
+
+        switch (Globals.ReceiveStatus)
         {
-            sign += "发送私信正常";
+            case ReceiveStatus.Normal:
+                sign += "接收私信正常";
+                break;
+            case ReceiveStatus.Cooling:
+                sign += "接收私信冷却中";
+                break;
         }
-        else if (Globals.SendStatus == -1)
+
+        sign += "，";
+
+        switch (Globals.SendStatus)
         {
-            sign += "发送私信冷却中";
-        }
-        else if (Globals.SendStatus == -2)
-        {
-            sign += "发送私信已禁言";
+            case SendStatus.Normal:
+                sign += "发送私信正常";
+                break;
+            case SendStatus.Cooling:
+                sign += "发送私信冷却中";
+                break;
+            case SendStatus.Forbidden:
+                sign += "发送私信已禁言";
+                break;
         }
 
         sign += "】";
@@ -471,7 +483,7 @@ public partial class BotService : IBotService
         CancellationToken cancellationToken = default)
     {
         //普通的私信session
-        HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+        HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
         {
             Method = HttpMethod.Get,
             RequestUri =
@@ -502,7 +514,7 @@ public partial class BotService : IBotService
         CancellationToken cancellationToken = default)
     {
         //被屏蔽的私信session
-        HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+        HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
         {
             Method = HttpMethod.Get,
             RequestUri =
@@ -528,4 +540,6 @@ public partial class BotService : IBotService
         var blockedList = (JsonArray?)response["data"]!["session_list"];
         return blockedList;
     }
+
+    #endregion
 }

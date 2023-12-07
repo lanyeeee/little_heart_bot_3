@@ -1,28 +1,33 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Nodes;
-using little_heart_bot_3.Models;
+using little_heart_bot_3.Data;
+using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
-using little_heart_bot_3.Repositories;
 using Polly;
 using Polly.Retry;
 using Serilog.Core;
 
 namespace little_heart_bot_3.Services.Implements;
 
-public partial class MessageService : IMessageService
+public class MessageService : IMessageService
 {
     private readonly Logger _logger;
-    private readonly IMessageRepository _messageRepository;
+    private readonly LittleHeartDbContext _db;
     private readonly JsonSerializerOptions _options;
+    private readonly HttpClient _httpClient;
 
     private readonly ResiliencePipeline _thumbsUpPipeline;
     private readonly ResiliencePipeline _sendPipeline;
 
-    public MessageService(Logger logger, IMessageRepository messageRepository)
+    public MessageService(Logger logger,
+        LittleHeartDbContext db,
+        JsonSerializerOptions options,
+        HttpClient httpClient)
     {
         _logger = logger;
-        _messageRepository = messageRepository;
-        _options = Globals.JsonSerializerOptions;
+        _db = db;
+        _options = options;
+        _httpClient = httpClient;
 
         _thumbsUpPipeline = new ResiliencePipelineBuilder()
             .AddRetry(new RetryStrategyOptions
@@ -71,9 +76,9 @@ public partial class MessageService : IMessageService
             .Build();
     }
 
-    public async Task SendAsync(MessageModel message, string? cookie, string? csrf, CancellationToken cancellationToken = default)
+    public async Task SendAsync(MessageModel message, CancellationToken cancellationToken = default)
     {
-        if (message.Completed == 1 || message.Code != 0)
+        if (message.Completed || message.Code != 0)
         {
             return;
         }
@@ -85,13 +90,13 @@ public partial class MessageService : IMessageService
         {
             await _sendPipeline.ExecuteAsync(async ctx =>
             {
-                JsonNode? response = await PostMessageAsync(message, cookie, csrf, ctx.CancellationToken);
+                JsonNode? response = await PostMessageAsync(message, ctx.CancellationToken);
                 if (response == null)
                 {
                     throw new LittleHeartException(Reason.NullResponse);
                 }
 
-                await HandleSendResponse(message, response, cancellationToken);
+                await HandleSendResponseAsync(message, response);
 
                 await Task.Delay(3000, ctx.CancellationToken);
             }, context);
@@ -134,14 +139,15 @@ public partial class MessageService : IMessageService
         }
     }
 
-    public async Task ThumbsUpAsync(MessageModel message, string? cookie, string? csrf,
-        CancellationToken cancellationToken = default)
+
+    public async Task ThumbsUpAsync(MessageModel message, CancellationToken cancellationToken = default)
     {
+        UserModel user = message.UserModel;
         var payload = new Dictionary<string, string?>
         {
-            { "roomid", message.RoomId },
-            { "csrf", csrf },
-            { "csrf_token", csrf }
+            { "roomid", message.RoomId.ToString() },
+            { "csrf", user.Csrf },
+            { "csrf_token", user.Csrf }
         };
 
         var context = ResilienceContextPool.Shared.Get(cancellationToken);
@@ -151,11 +157,11 @@ public partial class MessageService : IMessageService
         {
             await _thumbsUpPipeline.ExecuteAsync(async ctx =>
             {
-                HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+                HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
                 {
                     Method = HttpMethod.Post,
                     RequestUri = new Uri("https://api.live.bilibili.com/xlive/web-ucenter/v1/interact/likeInteract"),
-                    Headers = { { "Cookie", cookie } },
+                    Headers = { { "Cookie", user.Cookie } },
                     Content = new FormUrlEncodedContent(payload)
                 }, ctx.CancellationToken);
                 JsonNode? response =
@@ -234,16 +240,18 @@ public partial class MessageService : IMessageService
         }
     }
 
-
-    /// <exception cref="LittleHeartException">Reason.Ban Reason.CookieExpired</exception>
-    private async Task HandleSendResponse(MessageModel message, JsonNode response, CancellationToken cancellationToken = default)
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.Ban
+    /// <br/>Reason.CookieExpired
+    /// </exception>
+    private async Task HandleSendResponseAsync(MessageModel message, JsonNode response)
     {
-        message.Code = (int?)response["code"];
-        message.Response = response.ToString();
-        message.Completed = 1;
         //不管结果，一条弹幕只发一次
-        await SetCompletedAsync(message.Completed, message.Id, cancellationToken);
-        await SetCodeAndResponseAsync(message.Code, message.Response, message.Id, cancellationToken);
+        message.Completed = true;
+        message.Code = (int)response["code"]!;
+        message.Response = response.ToString();
+        _db.Messages.Update(message);
+        await _db.SaveChangesAsync(CancellationToken.None);
 
         if (message.Code == 0)
         {
@@ -254,7 +262,7 @@ public partial class MessageService : IMessageService
                 message.Uid,
                 message.TargetName);
         }
-        else if (message.Code == -412)//风控
+        else if (message.Code == -412) //风控
         {
             _logger.ForContext("Response", response.ToJsonString(_options))
                 .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为风控",
@@ -262,7 +270,7 @@ public partial class MessageService : IMessageService
                     message.TargetName);
             throw new LittleHeartException(response.ToJsonString(_options), Reason.Ban);
         }
-        else if (message.Code is -111 or -101)//Cookie过期
+        else if (message.Code is -111 or -101) //Cookie过期
         {
             _logger.ForContext("Response", response.ToJsonString(_options))
                 .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为Cookie过期",
@@ -270,42 +278,42 @@ public partial class MessageService : IMessageService
                     message.TargetName);
             throw new LittleHeartException(response.ToJsonString(_options), Reason.CookieExpired);
         }
-        else if (message.Code == -403)//可能是等级墙，也可能是全体禁言
+        else if (message.Code == -403) //可能是等级墙，也可能是全体禁言
         {
             _logger.ForContext("Response", response.ToJsonString(_options))
                 .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为主播开启了禁言",
                     message.Uid,
                     message.TargetName);
         }
-        else if (message.Code == 11000)//似乎跟Up主的身份有关系
+        else if (message.Code == 11000) //似乎跟Up主的身份有关系
         {
             _logger.ForContext("Response", response.ToJsonString(_options))
                 .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，原因未知",
                     message.Uid,
                     message.TargetName);
         }
-        else if (message.Code == 10030)//发弹幕的频率过高
+        else if (message.Code == 10030) //发弹幕的频率过高
         {
             _logger.ForContext("Response", response.ToJsonString(_options))
                 .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为发送弹幕的频率过高",
                     message.Uid,
                     message.TargetName);
         }
-        else if (message.Code == 10023)//用户已将主播拉黑
+        else if (message.Code == 10023) //用户已将主播拉黑
         {
             _logger.ForContext("Response", response.ToJsonString(_options))
                 .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为用户已将主播拉黑",
                     message.Uid,
                     message.TargetName);
         }
-        else if (message.Code == 1003)//用户已在本房间被禁言
+        else if (message.Code == 1003) //用户已在本房间被禁言
         {
             _logger.ForContext("Response", response.ToJsonString(_options))
                 .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为用户已在本房间被禁言",
                     message.Uid,
                     message.TargetName);
         }
-        else if (message.Code == 10024)//因主播隐私设置，暂无法发送弹幕
+        else if (message.Code == 10024) //因主播隐私设置，暂无法发送弹幕
         {
             _logger.ForContext("Response", response.ToJsonString(_options))
                 .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为主播隐私设置，暂无法发送弹幕",
@@ -322,9 +330,9 @@ public partial class MessageService : IMessageService
         }
     }
 
-    private async Task<JsonNode?> PostMessageAsync(MessageModel message, string? cookie, string? csrf,
-        CancellationToken cancellationToken = default)
+    private async Task<JsonNode?> PostMessageAsync(MessageModel message, CancellationToken cancellationToken = default)
     {
+        UserModel user = message.UserModel;
         var payload = new Dictionary<string, string?>
         {
             { "bubble", "0" },
@@ -333,16 +341,16 @@ public partial class MessageService : IMessageService
             { "mode", "1" },
             { "fontsize", "25" },
             { "rnd", DateTimeOffset.Now.ToUnixTimeSeconds().ToString() },
-            { "roomid", message.RoomId },
-            { "csrf", csrf },
-            { "csrf_token", csrf }
+            { "roomid", message.RoomId.ToString() },
+            { "csrf", user.Csrf },
+            { "csrf_token", user.Csrf }
         };
 
-        HttpResponseMessage response = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+        HttpResponseMessage response = await _httpClient.SendAsync(new HttpRequestMessage
         {
             Method = HttpMethod.Post,
             RequestUri = new Uri("https://api.live.bilibili.com/msg/send"),
-            Headers = { { "Cookie", cookie } },
+            Headers = { { "Cookie", user.Cookie } },
             Content = new FormUrlEncodedContent(payload)
         }, cancellationToken);
 
