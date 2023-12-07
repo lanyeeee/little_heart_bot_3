@@ -5,13 +5,14 @@ using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
 using Polly;
 using Polly.Retry;
+using Serilog;
 using Serilog.Core;
 
 namespace little_heart_bot_3.Services.Implements;
 
 public class MessageService : IMessageService
 {
-    private readonly Logger _logger;
+    private readonly ILogger _logger;
     private readonly LittleHeartDbContext _db;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
@@ -19,7 +20,7 @@ public class MessageService : IMessageService
     private readonly ResiliencePipeline _thumbsUpPipeline;
     private readonly ResiliencePipeline _sendPipeline;
 
-    public MessageService(Logger logger,
+    public MessageService(ILogger logger,
         LittleHeartDbContext db,
         JsonSerializerOptions options,
         HttpClient httpClient)

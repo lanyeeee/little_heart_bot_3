@@ -1,13 +1,14 @@
 using System.Text.Json;
 using little_heart_bot_3.Data;
 using Microsoft.Extensions.DependencyInjection;
+using Serilog;
 using Serilog.Core;
 
 namespace little_heart_bot_3.Services.Implements.App;
 
 public class TargetService : Implements.TargetService
 {
-    public TargetService([FromKeyedServices("app:Logger")] Logger logger,
+    public TargetService([FromKeyedServices("app:Logger")] ILogger logger,
         LittleHeartDbContext db,
         JsonSerializerOptions options,
         HttpClient httpClient)

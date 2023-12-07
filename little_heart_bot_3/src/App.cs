@@ -8,20 +8,21 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Polly;
 using Polly.Retry;
+using Serilog;
 using Serilog.Core;
 
 namespace little_heart_bot_3;
 
 public class App
 {
-    private readonly Logger _logger;
+    private readonly ILogger _logger;
     private readonly LittleHeartDbContext _db;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
 
     private readonly ResiliencePipeline _verifyCookiesPipeline;
 
-    public App([FromKeyedServices("app:Logger")] Logger logger,
+    public App([FromKeyedServices("app:Logger")] ILogger logger,
         LittleHeartDbContext db,
         JsonSerializerOptions options,
         HttpClient httpClient)

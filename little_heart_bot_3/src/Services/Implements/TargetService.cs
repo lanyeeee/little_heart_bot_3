@@ -6,13 +6,14 @@ using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
 using Polly;
 using Polly.Retry;
+using Serilog;
 using Serilog.Core;
 
 namespace little_heart_bot_3.Services.Implements;
 
 public class TargetService : ITargetService
 {
-    private readonly Logger _logger;
+    private readonly ILogger _logger;
     private readonly LittleHeartDbContext _db;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
@@ -21,7 +22,7 @@ public class TargetService : ITargetService
     private readonly ResiliencePipeline _postXPipeline;
     private readonly ResiliencePipeline _getExpPipeline;
 
-    public TargetService(Logger logger,
+    public TargetService(ILogger logger,
         LittleHeartDbContext db,
         JsonSerializerOptions options,
         HttpClient httpClient)
