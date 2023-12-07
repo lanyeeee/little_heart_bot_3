@@ -41,7 +41,7 @@ public static class Program
         });
 
         var logFormatter = new ExpressionTemplate("{ {ts:@t, template:@mt, msg:@m, level:@l, ex:@x, p:{..@p}} }\n");
-        services.AddKeyedSingleton<Logger>("bot:Logger", (_, _) => new LoggerConfiguration()
+        services.AddKeyedSingleton<ILogger>("bot:Logger", (_, _) => new LoggerConfiguration()
             .MinimumLevel.Debug()
             .WriteTo.File(
                 path: "logs/bot/bot-.txt",
@@ -54,7 +54,7 @@ public static class Program
             .Enrich.WithCaller(true)
             .CreateLogger());
 
-        services.AddKeyedSingleton<Logger>("app:Logger", (_, _) => new LoggerConfiguration()
+        services.AddKeyedSingleton<ILogger>("app:Logger", (_, _) => new LoggerConfiguration()
             .MinimumLevel.Debug()
             .WriteTo.File(
                 path: "logs/app/app-.txt",

@@ -3,19 +3,20 @@ using System.Text.Json.Nodes;
 using little_heart_bot_3.Data;
 using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
+using Serilog;
 using Serilog.Core;
 
 namespace little_heart_bot_3.Services.Implements;
 
 public class UserService : IUserService
 {
-    private readonly Logger _logger;
+    private readonly ILogger _logger;
     private readonly LittleHeartDbContext _db;
     private readonly IMessageService _messageService;
     private readonly ITargetService _targetService;
 
 
-    public UserService(Logger logger,
+    public UserService(ILogger logger,
         LittleHeartDbContext db,
         IMessageService messageService,
         ITargetService targetService)

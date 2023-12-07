@@ -6,13 +6,14 @@ using little_heart_bot_3.Others;
 using little_heart_bot_3.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Serilog;
 using Serilog.Core;
 
 namespace little_heart_bot_3;
 
 public class Bot
 {
-    private readonly Logger _logger;
+    private readonly ILogger _logger;
     private readonly IBotService _botService;
     private readonly IUserService _userService;
     private readonly LittleHeartDbContext _db;
@@ -25,7 +26,7 @@ public class Bot
     private readonly BotModel _botModel;
     private Dictionary<long, UserModel> _users = new();
 
-    public Bot([FromKeyedServices("bot:Logger")] Logger logger,
+    public Bot([FromKeyedServices("bot:Logger")] ILogger logger,
         [FromKeyedServices("bot:BotService")] IBotService botService,
         [FromKeyedServices("bot:UserService")] IUserService userService,
         LittleHeartDbContext db,

@@ -1,12 +1,13 @@
 using little_heart_bot_3.Data;
 using Microsoft.Extensions.DependencyInjection;
+using Serilog;
 using Serilog.Core;
 
 namespace little_heart_bot_3.Services.Implements.Bot;
 
 public class UserService : Implements.UserService
 {
-    public UserService([FromKeyedServices("bot:Logger")] Logger logger,
+    public UserService([FromKeyedServices("bot:Logger")] ILogger logger,
         LittleHeartDbContext db,
         [FromKeyedServices("bot:MessageService")]
         IMessageService messageService,
