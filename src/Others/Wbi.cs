@@ -43,9 +43,9 @@ public static class Wbi
         return MixinKeyEncTab.Aggregate("", (s, i) => s + orig[i])[..32];
     }
 
-    public static async Task<(string, string)> GetWbiKeysAsync()
+    public static async Task<(string, string)> GetWbiKeysAsync(HttpClient httpClient)
     {
-        HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+        HttpResponseMessage responseMessage = await httpClient.SendAsync(new HttpRequestMessage
         {
             Method = HttpMethod.Get,
             RequestUri = new Uri("https://api.bilibili.com/x/web-interface/nav"),

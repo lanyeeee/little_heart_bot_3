@@ -1,47 +1,32 @@
-﻿using little_heart_bot_3.Models;
+﻿using little_heart_bot_3.Data.Models;
+using little_heart_bot_3.Others;
 
 namespace little_heart_bot_3.Services;
 
 public interface IMessageService
 {
-    public Task SendAsync(MessageModel messageModel, string? cookie, string? csrf,
-        CancellationToken cancellationToken = default);
+    /// <summary>
+    /// 发送message到对应的直播间
+    /// </summary>
+    /// <param name="messageModel"></param>
+    /// <param name="cancellationToken"></param>
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.Ban
+    /// <br/>Reason.CookieExpired
+    /// </exception>
+    /// <exception cref="TaskCanceledException"></exception>
+    public Task SendAsync(MessageModel messageModel, CancellationToken cancellationToken = default);
 
-    public Task NewDayAsync(CancellationToken cancellationToken = default);
 
-    public Task ThumbsUpAsync(MessageModel message, string? cookie, string? csrf,
-        CancellationToken cancellationToken = default);
-
-    public Task<List<MessageModel>> GetMessagesByUid(string? uid, CancellationToken cancellationToken = default);
-
-    public Task<MessageModel?> GetMessagesByUidAndTargetUid(string? uid, string? targetUid,
-        CancellationToken cancellationToken = default);
-
-    public Task<List<MessageModel>> GetUncompletedMessagesByUid(string? uid,
-        CancellationToken cancellationToken = default);
-
-    public Task SetCodeAndResponseAsync(int? code, string? response, int id,
-        CancellationToken cancellationToken = default);
-
-    public Task SetCodeAndResponseByUidAndTargetUid(int? code, string? response, string? uid, string? targetUid,
-        CancellationToken cancellationToken = default);
-
-    public Task SetCompletedAsync(int completed, int id, CancellationToken cancellationToken = default);
-
-    public Task SetCompletedByUidAndTargetUid(int completed, string uid, string targetUid,
-        CancellationToken cancellationToken = default);
-
-    public Task DeleteByUid(string? uid, CancellationToken cancellationToken = default);
-
-    public Task DeleteByUidAndTargetUid(string? uid, string? targetUid, CancellationToken cancellationToken = default);
-
-    public Task<bool> CheckExistByUidAndTargetUid(string uid, string targetUid,
-        CancellationToken cancellationToken = default);
-
-    public Task Insert(MessageModel messageModel, CancellationToken cancellationToken = default);
-
-    public Task SetContentByUidAndTargetUid(string? content, string? uid, string? targetUid,
-        CancellationToken cancellationToken = default);
-
-    public Task<int> GetMessageNum(string? uid, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// 给message对应的直播间点赞
+    /// </summary>
+    /// <param name="message"></param>
+    /// <param name="cancellationToken"></param>
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.Ban
+    /// <br/>Reason.CookieExpired
+    /// </exception>
+    /// <exception cref="TaskCanceledException"></exception>
+    public Task ThumbsUpAsync(MessageModel message, CancellationToken cancellationToken = default);
 }

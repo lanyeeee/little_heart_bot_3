@@ -1,8 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using little_heart_bot_3.Models;
+using little_heart_bot_3.Data;
+using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
 using little_heart_bot_3.Services;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog.Core;
 
@@ -12,35 +14,33 @@ public class Bot
 {
     private readonly Logger _logger;
     private readonly IBotService _botService;
-    private readonly IMessageService _messageService;
-    private readonly ITargetService _targetService;
     private readonly IUserService _userService;
+    private readonly LittleHeartDbContext _db;
+    private readonly JsonSerializerOptions _options;
+    private readonly HttpClient _httpClient;
 
     private bool _talking = true;
     private int _talkNum;
     private long _midnight; //今天0点的分钟时间戳
     private readonly BotModel _botModel;
-    private Dictionary<string, UserModel> _users = new();
-    private readonly JsonSerializerOptions _options;
+    private Dictionary<long, UserModel> _users = new();
 
     public Bot([FromKeyedServices("bot:Logger")] Logger logger,
         [FromKeyedServices("bot:BotService")] IBotService botService,
-        [FromKeyedServices("bot:MessageService")]
-        IMessageService messageService,
-        [FromKeyedServices("bot:TargetService")]
-        ITargetService targetService,
-        [FromKeyedServices("bot:UserService")] IUserService userService)
+        [FromKeyedServices("bot:UserService")] IUserService userService,
+        LittleHeartDbContext db,
+        JsonSerializerOptions options,
+        HttpClient httpClient)
     {
         _logger = logger;
         _botService = botService;
-        _messageService = messageService;
-        _targetService = targetService;
         _userService = userService;
+        _db = db;
 
         DateTimeOffset today = DateTime.Today;
         _midnight = today.ToUnixTimeSeconds();
 
-        BotModel? botModel = _botService.GetBotAsync().Result;
+        BotModel? botModel = _db.Bots.SingleOrDefault();
         if (botModel == null)
         {
             _logger.Error("数据库bot_table表中没有数据");
@@ -53,7 +53,8 @@ public class Bot
         Globals.SendStatus = _botModel.SendStatus;
         Globals.ReceiveStatus = _botModel.ReceiveStatus;
 
-        _options = Globals.JsonSerializerOptions;
+        _options = options;
+        _httpClient = httpClient;
     }
 
     public async Task Main()
@@ -78,8 +79,8 @@ public class Bot
                         cancellationTokenSource.Cancel();
 
                         int cd = 15;
-                        Globals.SendStatus = -1;
-                        Globals.ReceiveStatus = -1;
+                        Globals.SendStatus = SendStatus.Cooling;
+                        Globals.ReceiveStatus = ReceiveStatus.Cooling;
                         while (cd != 0)
                         {
                             _logger.Warning("遇到风控 还需冷却 {cd} 分钟", cd);
@@ -110,7 +111,7 @@ public class Bot
         }
     }
 
-    private async Task CheckNewDayAsync(CancellationToken cancellationToken = default)
+    private async Task CheckNewDayAsync()
     {
         if (DateTimeOffset.Now.ToUnixTimeSeconds() - _midnight < 24 * 60 * 60 + 3 * 60)
         {
@@ -123,39 +124,42 @@ public class Bot
         DateTimeOffset today = DateTime.Today;
         _midnight = today.ToUnixTimeSeconds();
 
-        await _messageService.NewDayAsync(cancellationToken);
-        await _targetService.NewDayAsync(cancellationToken);
-        await _userService.NewDay(cancellationToken);
-    }
-
-    private async Task<Dictionary<string, UserModel>> GetUsersAsync(CancellationToken cancellationToken = default)
-    {
-        var result = new Dictionary<string, UserModel>();
-        var users = await _userService.GetAll(cancellationToken);
-        users.ForEach(user => result.Add(user.Uid!, user));
-        return result;
-    }
-
-    private async Task<JsonNode?> GetRoomDataAsync(string uid, string targetUid,
-        CancellationToken cancellationToken = default)
-    {
-        UserModel? userEntity = await _userService.Get(uid, cancellationToken);
-        if (userEntity == null)
+        await foreach (var message in _db.Messages)
         {
-            _logger.Error("找不到uid为 {uid} 的用户", uid);
-            return null;
+            message.Code = 0;
+            message.Response = null;
+            message.Completed = false;
         }
 
-        var (imgKey, subKey) = await Wbi.GetWbiKeysAsync();
+        await foreach (var target in _db.Targets)
+        {
+            target.Exp = 0;
+            target.WatchedSeconds = 0;
+            target.Completed = false;
+        }
+
+        await foreach (var user in _db.Users)
+        {
+            user.Completed = false;
+            user.ConfigNum = 0;
+        }
+
+        await _db.SaveChangesAsync(CancellationToken.None);
+    }
+
+    private async Task<JsonNode?> GetRoomDataAsync(UserModel user, long targetUid,
+        CancellationToken cancellationToken = default)
+    {
+        var (imgKey, subKey) = await Wbi.GetWbiKeysAsync(_httpClient);
         Dictionary<string, string> signedParams = Wbi.EncWbi(
-            parameters: new Dictionary<string, string> { { "mid", targetUid } },
+            parameters: new Dictionary<string, string> { { "mid", targetUid.ToString() } },
             imgKey: imgKey,
             subKey: subKey
         );
 
         string queryString = await new FormUrlEncodedContent(signedParams).ReadAsStringAsync(cancellationToken);
 
-        HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+        HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
         {
             Method = HttpMethod.Get,
             RequestUri = new Uri($"https://api.bilibili.com/x/space/wbi/acc/info?{queryString}"),
@@ -165,7 +169,7 @@ public class Bot
                     "user-agent",
                     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36"
                 },
-                { "cookie", userEntity.Cookie }
+                { "cookie", user.Cookie }
             },
         }, cancellationToken);
         await Task.Delay(1000, cancellationToken);
@@ -182,7 +186,7 @@ public class Bot
         {
             _logger.Error(new Exception(response.ToJsonString(_options)),
                 "uid {uid} 获取 {targetUid} 的直播间数据失败",
-                uid,
+                user.Uid,
                 targetUid);
             return null;
         }
@@ -191,7 +195,7 @@ public class Bot
         {
             _logger.Error(new Exception(response.ToJsonString(_options)),
                 "uid {uid} 获取 {targetUid} 的直播间数据失败",
-                uid,
+                user.Uid,
                 targetUid);
             throw new LittleHeartException(Reason.Ban);
         }
@@ -204,9 +208,9 @@ public class Bot
         return cookie.Substring(cookie.IndexOf("bili_jct=", StringComparison.Ordinal) + 9, 32);
     }
 
-    private async Task SendMessageAsync(string content, string userUid, CancellationToken cancellationToken = default)
+    private async Task SendMessageAsync(string content, UserModel user, CancellationToken cancellationToken = default)
     {
-        _talking = await _botService.SendMessageAsync(_botModel, content, userUid, cancellationToken);
+        _talking = await _botService.SendMessageAsync(_botModel, content, user, cancellationToken);
         if (_talking == false)
         {
             _logger.Warning("今日停止发送私信，今日共发送了 {talkNum} 条私信", _talkNum);
@@ -214,250 +218,263 @@ public class Bot
         }
 
         _talkNum++;
-        _users[userUid].ConfigTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds().ToString();
-        _users[userUid].ConfigNum++;
-        await _userService.Update(_users[userUid], cancellationToken);
+
+        user.ConfigTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds();
+        user.ConfigNum++;
+        await _db.SaveChangesAsync(CancellationToken.None);
     }
 
-    private async Task HandleCommandAsync(string uid, string command, string? parameter,
+    private async Task HandleCommandAsync(UserModel user, string command, string? parameter,
         CancellationToken cancellationToken = default)
     {
-        if (command == "/target_set")
+        switch (command)
         {
-            if (parameter == null)
-            {
+            case "/target_set" when parameter == null:
                 return;
-            }
-
-            string targetUid = parameter;
-            int targetNum = await _targetService.GetTargetNumAsync(uid, cancellationToken);
-
-            if (!targetUid.IsNumeric() || targetNum > 50)
+            case "/target_set":
             {
-                return;
-            }
+                string targetUidString = parameter;
+                int targetCount = user.Targets.Count;
 
-            JsonNode? data = await GetRoomDataAsync(uid, targetUid, cancellationToken);
-            if (data == null)
-            {
-                return;
-            }
-
-            string? targetName = (string?)data["name"];
-            string? roomId = data["live_room"]!["roomid"]?.GetValue<long>().ToString();
-            bool targetExist = await _targetService.CheckExistByUidAndTargetUidAsync(uid, targetUid, cancellationToken);
-
-            if (targetExist)
-            {
-                await _targetService.SetTargetNameAndRoomIdByUidAndTargetUidAsync(targetName, roomId, uid,
-                    targetUid, cancellationToken);
-                await _messageService.SetCompletedByUidAndTargetUid(0, uid, targetUid, cancellationToken);
-            }
-            else
-            {
-                var targetEntity = new TargetModel()
+                if (!targetUidString.IsNumeric() || targetCount > 50)
                 {
-                    Uid = uid,
-                    Completed = 0,
-                    RoomId = roomId,
-                    TargetName = targetName,
-                    TargetUid = targetUid
-                };
-                await _targetService.InsertAsync(targetEntity, cancellationToken);
-
-                bool messageExist =
-                    await _messageService.CheckExistByUidAndTargetUid(uid, targetUid, cancellationToken);
-                if (messageExist)
-                {
-                    await _messageService.SetCompletedByUidAndTargetUid(0, uid, targetUid, cancellationToken);
+                    return;
                 }
-                else
-                {
-                    var message = new MessageModel()
-                    {
-                        Uid = uid,
-                        TargetName = targetName,
-                        TargetUid = targetUid,
-                        RoomId = roomId,
-                        Code = 0,
-                        Content = "飘过~",
-                        Completed = 0
-                    };
-                    await _messageService.Insert(message, cancellationToken);
-                }
-            }
 
-            await _userService.SetCompleted(0, uid, cancellationToken);
-        }
-        else if (command == "/target_delete")
-        {
-            if (parameter == null)
-            {
-                return;
-            }
+                long targetUid = long.Parse(targetUidString);
 
-            if (parameter == "all")
-            {
-                await _targetService.DeleteByUidAsync(uid, cancellationToken);
-                return;
-            }
-
-            string targetUid = parameter;
-            if (!targetUid.IsNumeric())
-            {
-                return;
-            }
-
-            await _targetService.DeleteByUidAndTargetUidAsync(uid, targetUid, cancellationToken);
-        }
-        else if (command == "/message_set")
-        {
-            if (parameter == null)
-            {
-                return;
-            }
-
-            string[] pair = parameter.Split(" ", 2);
-            if (pair.Length != 2)
-            {
-                return;
-            }
-
-            string targetUid = pair[0].Trim();
-            string content = pair[1].Trim();
-            int messageNum = await _messageService.GetMessageNum(uid, cancellationToken);
-            if (!targetUid.IsNumeric() || content.Length > 20 || messageNum > 50)
-            {
-                return;
-            }
-
-            bool exist = await _messageService.CheckExistByUidAndTargetUid(uid, targetUid, cancellationToken);
-            if (exist)
-            {
-                await _messageService.SetContentByUidAndTargetUid(content, uid, targetUid, cancellationToken);
-                await _messageService.SetCompletedByUidAndTargetUid(0, uid, targetUid, cancellationToken);
-                await _messageService.SetCodeAndResponseByUidAndTargetUid(0, null, uid, targetUid, cancellationToken);
-            }
-            else
-            {
-                JsonNode? data = await GetRoomDataAsync(uid, targetUid, cancellationToken);
+                JsonNode? data = await GetRoomDataAsync(user, targetUid, cancellationToken);
                 if (data == null)
                 {
                     return;
                 }
 
-                string? targetName = (string?)data["name"];
-                string? roomId = (string?)data["live_room"]!["roomid"];
+                string targetName = (string)data["name"]!;
+                long roomId = (long)data["live_room"]!["roomid"]!;
+                TargetModel? target = user.Targets.FirstOrDefault(t => t.TargetUid == targetUid);
 
-                var messageEntity = new MessageModel
+                if (target != null)
                 {
-                    Uid = uid,
-                    TargetUid = targetUid,
-                    TargetName = targetName,
-                    RoomId = roomId,
-                    Content = content,
-                    Code = 0
-                };
+                    target.TargetName = targetName;
+                    target.RoomId = roomId;
+                    target.Completed = false;
 
-                await _messageService.Insert(messageEntity, cancellationToken);
-            }
-        }
-        else if (command == "/message_delete")
-        {
-            if (parameter == null)
-            {
-                return;
-            }
-
-            if (parameter == "all")
-            {
-                List<TargetModel>? targets = _users[uid].Targets;
-                if (targets == null)
-                {
-                    return;
+                    await _db.SaveChangesAsync(CancellationToken.None);
                 }
-
-                foreach (var target in targets)
+                else
                 {
-                    bool exist =
-                        await _targetService.CheckExistByUidAndTargetUidAsync(uid, target.TargetUid, cancellationToken);
-                    if (exist)
+                    target = new TargetModel()
                     {
-                        await _messageService.SetContentByUidAndTargetUid("飘过~", uid, target.TargetUid,
-                            cancellationToken);
-                        await _messageService.SetCodeAndResponseByUidAndTargetUid(0, null, uid,
-                            target.TargetUid, cancellationToken);
+                        Uid = user.Uid,
+                        Completed = false,
+                        RoomId = roomId,
+                        TargetName = targetName,
+                        TargetUid = targetUid
+                    };
+
+                    await _db.Targets.AddAsync(target, CancellationToken.None);
+                    await _db.SaveChangesAsync(CancellationToken.None);
+
+                    var message = user.Messages.FirstOrDefault(m => m.TargetUid == targetUid);
+
+                    if (message != null)
+                    {
+                        message.Completed = false;
+                        await _db.SaveChangesAsync(CancellationToken.None);
                     }
                     else
                     {
-                        await _messageService.DeleteByUidAndTargetUid(uid, target.Uid, cancellationToken);
+                        message = new MessageModel()
+                        {
+                            Uid = user.Uid,
+                            TargetName = targetName,
+                            TargetUid = targetUid,
+                            RoomId = roomId,
+                            Code = 0,
+                            Content = Globals.DefaultMessageContent,
+                            Completed = false
+                        };
+                        await _db.Messages.AddAsync(message, CancellationToken.None);
+                        await _db.SaveChangesAsync(CancellationToken.None);
                     }
                 }
 
+                user.Completed = false;
+                await _db.SaveChangesAsync(CancellationToken.None);
+                break;
+            }
+            case "/target_delete" when parameter == null:
+                return;
+            case "/target_delete" when parameter == "all":
+            {
+                _db.Targets.RemoveRange(user.Targets);
+                await _db.SaveChangesAsync(CancellationToken.None);
                 return;
             }
-
-            string targetUid = parameter;
-            if (!targetUid.IsNumeric())
+            case "/target_delete":
             {
-                return;
-            }
-
-            bool targetExist = await _targetService.CheckExistByUidAndTargetUidAsync(uid, targetUid, cancellationToken);
-            if (targetExist)
-            {
-                await _messageService.SetContentByUidAndTargetUid("飘过~", uid, targetUid, cancellationToken);
-                await _messageService.SetCodeAndResponseByUidAndTargetUid(0, null, uid, targetUid, cancellationToken);
-            }
-            else
-            {
-                await _messageService.DeleteByUidAndTargetUid(uid, targetUid, cancellationToken);
-            }
-        }
-        else if (command == "/cookie_commit")
-        {
-            try
-            {
-                if (parameter == null)
+                string targetUidString = parameter;
+                if (!targetUidString.IsNumeric())
                 {
                     return;
                 }
 
-                var userEntity = await _userService.Get(uid, cancellationToken);
-                if (userEntity == null)
+                long targetUid = long.Parse(targetUidString);
+                TargetModel? target = user.Targets.FirstOrDefault(t => t.TargetUid == targetUid);
+                if (target != null)
+                {
+                    user.Targets.Remove(target);
+                    await _db.SaveChangesAsync(CancellationToken.None);
+                }
+
+                break;
+            }
+            case "/message_set" when parameter == null:
+                return;
+            case "/message_set":
+            {
+                string[] pair = parameter.Split(" ", 2);
+                if (pair.Length != 2)
                 {
                     return;
                 }
 
-                userEntity.Cookie = parameter.Replace("\n", "");
-                userEntity.Csrf = GetCsrf(userEntity.Cookie);
-                userEntity.CookieStatus = 0;
+                string targetUidString = pair[0].Trim();
+                string content = pair[1].Trim();
+                int messageCount = user.Messages.Count;
+                if (!targetUidString.IsNumeric() || content.Length > 20 || messageCount > 50)
+                {
+                    return;
+                }
 
-                await _userService.Update(userEntity, cancellationToken);
+                long targetUid = long.Parse(targetUidString);
+
+                MessageModel? message = user.Messages.FirstOrDefault(m => m.TargetUid == targetUid);
+                if (message != null)
+                {
+                    message.Content = content;
+                    message.Completed = false;
+                    message.Code = 0;
+                    message.Response = null;
+                    await _db.SaveChangesAsync(CancellationToken.None);
+                }
+                else
+                {
+                    JsonNode? data = await GetRoomDataAsync(user, targetUid, cancellationToken);
+                    if (data == null)
+                    {
+                        return;
+                    }
+
+                    string targetName = (string)data["name"]!;
+                    long roomId = (long)data["live_room"]!["roomid"]!;
+
+                    message = new MessageModel
+                    {
+                        Uid = user.Uid,
+                        TargetUid = targetUid,
+                        TargetName = targetName,
+                        RoomId = roomId,
+                        Content = content,
+                        Code = 0
+                    };
+                    await _db.Messages.AddAsync(message, CancellationToken.None);
+                    await _db.SaveChangesAsync(CancellationToken.None);
+                }
+
+                break;
             }
-            catch (Exception ex)
+            case "/message_delete" when parameter == null:
+                return;
+            case "/message_delete" when parameter == "all":
             {
+                //需要保留的message(有对应target的message)
+                var updatedMessage = user.Messages.Where(
+                    m => user.Targets.Any(t => t.TargetUid == m.TargetUid)).ToList();
+                foreach (var message in updatedMessage)
+                {
+                    message.Content = Globals.DefaultMessageContent;
+                    message.Code = 0;
+                    message.Response = null;
+                }
+
+                await _db.SaveChangesAsync(CancellationToken.None);
+
+                //需要删除的message(除了要保留的message，剩下的都是需要删除的message)
+                var removedMessages = user.Messages.Except(updatedMessage).ToList();
+                _db.Messages.RemoveRange(removedMessages);
+                await _db.SaveChangesAsync(CancellationToken.None);
+
+                return;
+            }
+            case "/message_delete":
+            {
+                string targetUidString = parameter;
+                if (!targetUidString.IsNumeric())
+                {
+                    return;
+                }
+
+                long targetUid = long.Parse(targetUidString);
+
+                MessageModel? message = user.Messages.FirstOrDefault(m => m.TargetUid == targetUid);
+                if (message is null)
+                {
+                    break;
+                }
+
+                TargetModel? target = user.Targets.FirstOrDefault(t => t.TargetUid == targetUid);
+
+                if (target != null)
+                {
+                    message.Content = Globals.DefaultMessageContent;
+                    message.Code = 0;
+                    message.Response = null;
+                    await _db.SaveChangesAsync(CancellationToken.None);
+                }
+                else
+                {
+                    _db.Messages.Remove(message);
+                    await _db.SaveChangesAsync(CancellationToken.None);
+                }
+
+                break;
+            }
+            case "/cookie_commit" when parameter is null:
+                break;
+            case "/cookie_commit":
+            {
+                try
+                {
+                    user.Cookie = parameter.Replace("\n", "");
+                    user.Csrf = GetCsrf(user.Cookie);
+                    user.CookieStatus = 0;
+                    await _db.SaveChangesAsync(CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
 #if DEBUG
-                Console.WriteLine(ex);
+                    Console.WriteLine(ex);
 #endif
-                _logger.Error(ex, "uid {uid} 提交的cookie有误", uid);
-            }
-        }
-        else if (command == "/config_all")
-        {
-            string? content = _userService.GetConfigString(_users[uid]);
-            if (content == null)
-            {
-                return;
-            }
+                    _logger.Error(ex, "uid {uid} 提交的cookie有误", user.Uid);
+                }
 
-            await SendMessageAsync(content, uid, cancellationToken);
-        }
-        else if (command == "/message_config")
-        {
-            if (parameter == null)
+                break;
+            }
+            case "/config_all":
             {
-                string? content = _userService.GetMessageConfigString(_users[uid]);
+                string? content = _userService.GetConfigAllString(user);
+                if (content == null)
+                {
+                    return;
+                }
+
+                await SendMessageAsync(content, user, cancellationToken);
+                break;
+            }
+            case "/message_config" when parameter == null:
+            {
+                string? content = _userService.GetAllMessageConfigString(user);
                 if (content == null)
                 {
                     return;
@@ -469,15 +486,16 @@ public class Bot
                         "设置的弹幕过多，配置信息长度大于500，超过了私信长度的上限，无法发送\n\n请尝试使用\n/message_config 目标uid\n进行单个查询\n\n或者使用/message_config all\n获取分段的完整配置信息(每段消耗一次查询次数)";
                 }
 
-                content += $"\n已用查询次数({_users[uid].ConfigNum + 1}/10)\n";
-                await SendMessageAsync(content, uid, cancellationToken);
+                content += $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
+                await SendMessageAsync(content, user, cancellationToken);
+                break;
             }
-            else
+            case "/message_config":
             {
                 parameter = parameter.Trim();
                 if (parameter == "all")
                 {
-                    List<string>? contents = _userService.GetMessageConfigStringSplit(_users[uid]);
+                    List<string>? contents = _userService.GetAllMessageConfigStringSplit(user);
                     if (contents == null)
                     {
                         return;
@@ -485,31 +503,35 @@ public class Bot
 
                     foreach (string message in contents)
                     {
-                        string content = message + $"\n已用查询次数({_users[uid].ConfigNum + 1}/10)\n";
-                        await SendMessageAsync(content, uid, cancellationToken);
+                        string content = message + $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
+                        await SendMessageAsync(content, user, cancellationToken);
                         await Task.Delay(1000, cancellationToken);
                     }
                 }
                 else
                 {
-                    string? content =
-                        await _userService.GetMessageConfigStringAsync(_users[uid], parameter.Trim(),
-                            cancellationToken);
+                    long targetUid = long.Parse(parameter);
+                    MessageModel? message = user.Messages.FirstOrDefault(m => m.TargetUid == targetUid);
+                    if (message == null)
+                    {
+                        return;
+                    }
+
+                    string? content = _userService.GetSpecifyMessageConfigString(message);
                     if (content == null)
                     {
                         return;
                     }
 
-                    content += $"\n已用查询次数({_users[uid].ConfigNum + 1}/10)\n";
-                    await SendMessageAsync(content, uid, cancellationToken);
+                    content += $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
+                    await SendMessageAsync(content, user, cancellationToken);
                 }
+
+                break;
             }
-        }
-        else if (command == "/target_config")
-        {
-            if (parameter == null)
+            case "/target_config" when parameter == null:
             {
-                string? content = _userService.GetTargetConfigString(_users[uid]);
+                string? content = _userService.GetAllTargetConfigString(user);
                 if (content == null)
                 {
                     return;
@@ -521,15 +543,16 @@ public class Bot
                         "设置的目标过多，配置信息长度大于500，超过了私信长度的上限，无法发送\n\n请尝试使用\n/target_config 目标uid\n进行单个查询\n\n或者使用\n/target_config all\n获取分段的完整配置信息(每段消耗一次查询次数)\n";
                 }
 
-                content += $"\n已用查询次数({_users[uid].ConfigNum + 1}/10)\n";
-                await SendMessageAsync(content, uid, cancellationToken);
+                content += $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
+                await SendMessageAsync(content, user, cancellationToken);
+                break;
             }
-            else
+            case "/target_config":
             {
                 parameter = parameter.Trim();
                 if (parameter == "all")
                 {
-                    List<string>? contents = _userService.GetTargetConfigStringSplit(_users[uid]);
+                    List<string>? contents = _userService.GetAllTargetConfigStringSplit(user);
                     if (contents == null)
                     {
                         return;
@@ -537,54 +560,58 @@ public class Bot
 
                     foreach (string message in contents)
                     {
-                        string content = message + $"\n已用查询次数({_users[uid].ConfigNum + 1}/10)\n";
-                        await SendMessageAsync(content, uid, cancellationToken);
+                        string content = message + $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
+                        await SendMessageAsync(content, user, cancellationToken);
                         await Task.Delay(1000, cancellationToken);
                     }
                 }
                 else
                 {
-                    string? content =
-                        await _userService.GetTargetConfigStringAsync(_users[uid], parameter.Trim(), cancellationToken);
+                    long targetUid = long.Parse(parameter);
+                    TargetModel? target = user.Targets.FirstOrDefault(t => t.TargetUid == targetUid);
+                    if (target == null)
+                    {
+                        return;
+                    }
+
+                    string? content = _userService.GetSpecifyTargetConfigString(target);
                     if (content == null)
                     {
                         return;
                     }
 
-                    content += $"\n已用查询次数({_users[uid].ConfigNum + 1}/10)\n";
-                    await SendMessageAsync(content, uid, cancellationToken);
+                    content += $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
+                    await SendMessageAsync(content, user, cancellationToken);
                 }
-            }
-        }
-        else if (command == "/delete")
-        {
-            await _targetService.DeleteByUidAsync(uid, cancellationToken);
-            await _messageService.DeleteByUid(uid, cancellationToken);
 
-            var userEntity = await _userService.Get(uid, cancellationToken);
-            if (userEntity == null)
+                break;
+            }
+            case "/delete":
             {
-                return;
+                user.Cookie = "";
+                user.Csrf = "";
+                user.Completed = false;
+                user.CookieStatus = CookieStatus.Error;
+
+                _db.Targets.RemoveRange(user.Targets);
+                _db.Messages.RemoveRange(user.Messages);
+
+                await _db.SaveChangesAsync(CancellationToken.None);
+                break;
             }
-
-            userEntity.Cookie = "";
-            userEntity.Csrf = "";
-            userEntity.Completed = 0;
-            userEntity.CookieStatus = -1;
-
-            await _userService.Update(userEntity, cancellationToken);
-            _users[uid] = userEntity;
         }
     }
 
-    private async Task HandleMessagesAsync(string uid, int lastTimestamp, IEnumerable<JsonNode?>? messages,
+    /// <summary>
+    /// 处理lastTimestamp之后的私信
+    /// </summary>
+    /// <param name="user"></param>
+    /// <param name="lastTimestamp"></param>
+    /// <param name="messages"></param>
+    /// <param name="cancellationToken"></param>
+    private async Task HandleMessagesAsync(UserModel user, long lastTimestamp, IEnumerable<JsonNode?> messages,
         CancellationToken cancellationToken = default)
     {
-        if (messages == null)
-        {
-            return;
-        }
-
         foreach (var msg in messages)
         {
             if (msg == null)
@@ -593,8 +620,8 @@ public class Bot
             }
 
             //忽略 已读的、bot发送的、非文字的 消息
-            if ((int?)msg["timestamp"] <= lastTimestamp ||
-                msg["sender_uid"]?.GetValue<long>().ToString() == _botModel.Uid ||
+            if ((long?)msg["timestamp"] <= lastTimestamp ||
+                (long?)msg["sender_uid"] == _botModel.Uid ||
                 (int?)msg["msg_type"] != 1)
             {
                 continue;
@@ -602,19 +629,19 @@ public class Bot
 
             try
             {
-                string? timestamp = msg["timestamp"]?.GetValue<long>().ToString();
+                long? timestamp = (long?)msg["timestamp"];
                 string? contentJson = (string?)msg["content"];
                 if (timestamp == null || contentJson == null)
                 {
                     return;
                 }
 
-                _users[uid].ReadTimestamp = timestamp;
+                user.ReadTimestamp = timestamp.Value;
                 string? content = (string?)JsonNode.Parse(contentJson)!["content"];
                 content = content?.Trim();
-                _logger.Information("{Uid}：{Content}", uid, content);
+                _logger.Information("{Uid}：{Content}", user.Uid, content);
 #if DEBUG
-                Console.WriteLine($"{uid}：{content}");
+                Console.WriteLine($"{user.Uid}：{content}");
 #endif
                 if (content?.StartsWith("/") ?? false)
                 {
@@ -623,18 +650,18 @@ public class Bot
                     {
                         string command = pair[0].Trim();
                         string parameter = pair[1].Trim();
-                        await HandleCommandAsync(uid, command, parameter, cancellationToken);
+                        await HandleCommandAsync(user, command, parameter, cancellationToken);
                     }
                     else
                     {
                         string command = pair[0].Trim();
-                        await HandleCommandAsync(uid, command, null, cancellationToken);
+                        await HandleCommandAsync(user, command, null, cancellationToken);
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.Fatal(ex, "处理uid {Uid} 的消息时出错", uid);
+                _logger.Fatal(ex, "处理uid {Uid} 的消息时出错", user.Uid);
             }
         }
     }
@@ -647,7 +674,11 @@ public class Bot
             return;
         }
 
-        _users = await GetUsersAsync(cancellationToken);
+        _users = await _db.Users
+            .Include(u => u.Messages)
+            .Include(u => u.Targets)
+            .AsSplitQuery()
+            .ToDictionaryAsync(user => user.Uid, user => user, cancellationToken);
 
         foreach (var session in sessionList)
         {
@@ -656,11 +687,13 @@ public class Bot
                 continue;
             }
 
-            string? uid = session["talker_id"]?.GetValue<long>().ToString();
-            if (uid == null)
+            long? nullableUid = (long?)session["talker_id"];
+            if (nullableUid == null)
             {
                 continue;
             }
+
+            long uid = nullableUid.Value;
 
             JsonObject? lastMsg = session["last_msg"]?.AsObject();
             if (lastMsg == null)
@@ -668,7 +701,7 @@ public class Bot
                 continue;
             }
 
-            int? timestamp = lastMsg.Count != 0 ? (int?)lastMsg["timestamp"] : 0;
+            long? timestamp = lastMsg.Count != 0 ? (long?)lastMsg["timestamp"] : 0;
             if (timestamp == null)
             {
                 continue;
@@ -681,25 +714,38 @@ public class Bot
                 user = new UserModel
                 {
                     Uid = uid,
-                    Cookie = "",
-                    Csrf = "",
-                    ReadTimestamp = timestamp.ToString(),
-                    ConfigTimestamp = "0",
+                    Cookie = string.Empty,
+                    Csrf = string.Empty,
+                    ReadTimestamp = timestamp.Value,
+                    ConfigTimestamp = 0,
                     ConfigNum = 0
                 };
                 IEnumerable<JsonNode?>? messages =
                     await _botService.GetMessagesAsync(_botModel, user, cancellationToken);
+
                 _users.Add(uid, user);
-                await _userService.Insert(user, cancellationToken);
-                await HandleMessagesAsync(uid, 0, messages, cancellationToken);
+                await _db.Users.AddAsync(user, CancellationToken.None);
+                await _db.SaveChangesAsync(CancellationToken.None);
+
+                if (messages != null)
+                {
+                    await HandleMessagesAsync(user, 0, messages, cancellationToken);
+                }
             }
-            else if (timestamp > Int32.Parse(_users[uid].ReadTimestamp!)) //发新消息的用户
+            else if (timestamp > user.ReadTimestamp) //发新消息的用户
             {
-                int readTimestamp = Int32.Parse(_users[uid].ReadTimestamp!);
                 IEnumerable<JsonNode?>? messages =
                     await _botService.GetMessagesAsync(_botModel, user, cancellationToken);
-                await _userService.SetReadTimestamp(timestamp.ToString()!, uid, cancellationToken);
-                await HandleMessagesAsync(uid, readTimestamp, messages, cancellationToken);
+
+                //只要成功获取用户的私信，无论这些私信是否成功处理，都只处理一次
+                long readTimestamp = user.ReadTimestamp;
+                user.ReadTimestamp = timestamp.Value;
+                await _db.SaveChangesAsync(CancellationToken.None);
+
+                if (messages != null)
+                {
+                    await HandleMessagesAsync(user, readTimestamp, messages, cancellationToken);
+                }
             }
         }
     }
@@ -719,18 +765,11 @@ public class Bot
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            await CheckNewDayAsync(cancellationToken);
+            await CheckNewDayAsync();
             await HandleIncomingMessageAsync(cancellationToken);
 
-            Globals.ReceiveStatus = 0;
-            if (_talking)
-            {
-                Globals.SendStatus = 0;
-            }
-            else
-            {
-                Globals.SendStatus = -2;
-            }
+            Globals.ReceiveStatus = ReceiveStatus.Normal;
+            Globals.SendStatus = _talking ? SendStatus.Normal : SendStatus.Forbidden;
 
             await Task.Delay(1000, cancellationToken);
         }

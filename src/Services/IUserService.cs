@@ -1,50 +1,59 @@
-﻿using little_heart_bot_3.Models;
+﻿using little_heart_bot_3.Data.Models;
 
 namespace little_heart_bot_3.Services;
 
 public interface IUserService
 {
-    public Task SendMessageAsync(UserModel userModel, CancellationToken cancellationToken = default);
+    public Task SendMessageAsync(UserModel user, CancellationToken cancellationToken = default);
 
-    public Task WatchLiveAsync(UserModel userModel, CancellationToken cancellationToken = default);
+    public Task WatchLiveAsync(UserModel user, CancellationToken cancellationToken = default);
 
-    public string? GetConfigString(UserModel userModel);
+    /// <summary>
+    /// 对应/config_all命令
+    /// </summary>
+    /// <param name="user"></param>
+    /// <returns></returns>
+    public string? GetConfigAllString(UserModel user);
 
-    public string? GetMessageConfigString(UserModel userModel);
+    /// <summary>
+    /// 对应/message_config 不带参数 的命令
+    /// </summary>
+    /// <param name="user"></param>
+    /// <returns></returns>
+    public string? GetAllMessageConfigString(UserModel user);
 
-    public List<string>? GetMessageConfigStringSplit(UserModel userModel);
+    /// <summary>
+    /// 对应/message_config 参数为targetUid 的命令
+    /// </summary>
+    /// <param name="message"></param>
+    /// <returns></returns>
+    public string? GetSpecifyMessageConfigString(MessageModel message);
 
-    public Task<string?> GetMessageConfigStringAsync(UserModel userModel, string targetUid,
-        CancellationToken cancellationToken = default);
+    /// <summary>
+    /// 对应 /message_config 参数为all 的命令
+    /// </summary>
+    /// <param name="user"></param>
+    /// <returns></returns>
+    public List<string>? GetAllMessageConfigStringSplit(UserModel user);
 
-    public string? GetTargetConfigString(UserModel userModel);
+    /// <summary>
+    /// 对应/target_config 不带参数 的命令
+    /// </summary>
+    /// <param name="user"></param>
+    /// <returns></returns>
+    public string? GetAllTargetConfigString(UserModel user);
 
-    public List<string>? GetTargetConfigStringSplit(UserModel userModel);
+    /// <summary>
+    /// 对应/target_config 参数为targetUid 的命令
+    /// </summary>
+    /// <param name="target"></param>
+    /// <returns></returns>
+    public string? GetSpecifyTargetConfigString(TargetModel target);
 
-    public Task<string?> GetTargetConfigStringAsync(UserModel userModel, string targetUid,
-        CancellationToken cancellationToken = default);
-
-    public Task NewDay(CancellationToken cancellationToken = default);
-
-    public Task<List<UserModel>> GetUncompletedUsersAsync(int num, CancellationToken cancellationToken = default);
-
-    public Task<List<UserModel>> GetUnverifiedUsersAsync(CancellationToken cancellationToken = default);
-
-    public Task MarkCookieError(string? uid, CancellationToken cancellationToken = default);
-
-    public Task MarkCookieValid(string? uid, CancellationToken cancellationToken = default);
-
-    public Task SetCompleted(int completed, string? uid, CancellationToken cancellationToken = default);
-
-    public Task<UserModel?> Get(string? uid, CancellationToken cancellationToken = default);
-
-    public Task<List<UserModel>> GetAll(CancellationToken cancellationToken = default);
-
-    public Task SetReadTimestamp(string readTimestamp, string uid, CancellationToken cancellationToken = default);
-
-    public Task Insert(UserModel userModel, CancellationToken cancellationToken = default);
-
-    public Task Delete(string? uid, CancellationToken cancellationToken = default);
-
-    public Task Update(UserModel userModel, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// 对应/target_config 参数为all 的命令
+    /// </summary>
+    /// <param name="user"></param>
+    /// <returns></returns>
+    public List<string>? GetAllTargetConfigStringSplit(UserModel user);
 }

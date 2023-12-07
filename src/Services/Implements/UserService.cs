@@ -1,46 +1,43 @@
 ﻿using System.Text;
 using System.Text.Json.Nodes;
-using little_heart_bot_3.Models;
+using little_heart_bot_3.Data;
+using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
-using little_heart_bot_3.Repositories;
 using Serilog.Core;
 
 namespace little_heart_bot_3.Services.Implements;
 
-public partial class UserService : IUserService
+public class UserService : IUserService
 {
     private readonly Logger _logger;
-    private readonly IUserRepository _userRepository;
+    private readonly LittleHeartDbContext _db;
     private readonly IMessageService _messageService;
     private readonly ITargetService _targetService;
 
 
-    public UserService(Logger logger, IUserRepository userRepository, IMessageService messageService,
+    public UserService(Logger logger,
+        LittleHeartDbContext db,
+        IMessageService messageService,
         ITargetService targetService)
     {
         _logger = logger;
-        _userRepository = userRepository;
+        _db = db;
         _messageService = messageService;
         _targetService = targetService;
     }
 
     public async Task SendMessageAsync(UserModel user, CancellationToken cancellationToken = default)
     {
-        if (user.Messages == null)
-        {
-            return;
-        }
-
         foreach (var message in user.Messages)
         {
             try
             {
                 //发弹幕之前先点个赞
-                await _messageService.ThumbsUpAsync(message, user.Cookie, user.Csrf, cancellationToken);
+                await _messageService.ThumbsUpAsync(message, cancellationToken);
+                await Task.Delay(100, cancellationToken);
 
-                await Task.Delay(1000, cancellationToken);
-
-                await _messageService.SendAsync(message, user.Cookie, user.Csrf, cancellationToken);
+                await _messageService.SendAsync(message, cancellationToken);
+                await Task.Delay(900, cancellationToken);
             }
             catch (LittleHeartException ex)
             {
@@ -48,7 +45,9 @@ public partial class UserService : IUserService
                 {
                     case Reason.CookieExpired:
                         _logger.Warning("uid {Uid} 的cookie已过期", message.Uid);
-                        await MarkCookieError(message.Uid, cancellationToken);
+                        user.CookieStatus = CookieStatus.Error;
+                        _db.Users.Update(user);
+                        await _db.SaveChangesAsync(cancellationToken);
                         //Cookie过期，不用再发了，直接返回，这个task正常结束
                         return;
                     case Reason.Ban:
@@ -61,17 +60,7 @@ public partial class UserService : IUserService
 
     public async Task WatchLiveAsync(UserModel user, CancellationToken cancellationToken = default)
     {
-        UserModel? thisUser = await _userRepository.GetAsync(user.Uid, cancellationToken);
-
-        if (thisUser?.CookieStatus != 1)
-        {
-            return;
-        }
-
-        if (user.Targets == null)
-        {
-            return;
-        }
+        _db.Users.Attach(user);
 
         //TODO: 改用Semaphore限制
         int maxCountPerRound = 10; //每个用户每轮最多同时观看多少个直播
@@ -80,12 +69,12 @@ public partial class UserService : IUserService
 
         foreach (var target in user.Targets)
         {
-            if (target.Completed == 1)
+            if (target.Completed)
             {
                 continue; //已完成的任务就跳过
             }
 
-            tasks.Add(_targetService.StartAsync(target, user.Cookie, user.Csrf, cancellationToken));
+            tasks.Add(_targetService.StartAsync(target, cancellationToken));
             _logger.Verbose("uid {Uid} 开始观看 {TargetName} 的直播",
                 user.Uid, target.TargetName);
 
@@ -106,21 +95,20 @@ public partial class UserService : IUserService
             {
                 var finishedTask = await Task.WhenAny(tasks);
                 tasks.Remove(finishedTask);
-                
+
                 await finishedTask;
             }
 
             //如果有任何一个任务未完成
-            if (user.Targets.Any(t => t.Completed != 1))
+            if (user.Targets.Any(t => !t.Completed))
             {
                 return;
             }
 
-
             //如果所有任务都完成了
-            user.Completed = 1;
             _logger.Information("uid {Uid} 今日的所有任务已完成", user.Uid);
-            await _userRepository.SetCompletedAsync(user.Completed, user.Uid, cancellationToken);
+            user.Completed = true;
+            await _db.SaveChangesAsync(CancellationToken.None);
         }
         catch (LittleHeartException ex)
         {
@@ -128,7 +116,8 @@ public partial class UserService : IUserService
             {
                 case Reason.CookieExpired:
                     _logger.Warning("uid {Uid} 的cookie已过期", user.Uid);
-                    await MarkCookieError(user.Uid, cancellationToken);
+                    user.CookieStatus = CookieStatus.Error;
+                    await _db.SaveChangesAsync(CancellationToken.None);
                     //Cookie过期，不用再看，直接返回，这个task正常结束
                     return;
                 case Reason.Ban:
@@ -138,68 +127,62 @@ public partial class UserService : IUserService
         }
     }
 
-    public string? GetConfigString(UserModel user)
+    public string? GetConfigAllString(UserModel user)
     {
         long nowTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds();
-        if (user.ConfigNum >= 10 || nowTimestamp - Int64.Parse(user.ConfigTimestamp!) < 60)
+        if (user.ConfigNum >= 10 || nowTimestamp - user.ConfigTimestamp < 60)
         {
             return null;
         }
 
-        if (user.Targets == null)
+        var stringBuilder = new StringBuilder();
+
+        stringBuilder.Append($"目标({user.Targets.Count}/50)：\n");
+        user.Targets.ForEach(target => stringBuilder.Append($"{target.TargetName}\n"));
+
+        if (stringBuilder.Length > 350)
         {
-            return null;
+            stringBuilder.Clear();
+            stringBuilder.Append(
+                $"目标({user.Targets.Count}/50)：\n目标过多，信息超过了私信长度的上限，所以/config里无法携带目标的配置信息，请尝试使用/target_config查看目标配置\n");
         }
 
-        string result = "";
-        result += $"目标({user.Targets.Count}/50)：\n";
-        user.Targets.ForEach(target => result += $"{target.TargetName}\n");
-
-        if (result.Length > 350)
-        {
-            result =
-                $"目标({user.Targets.Count}/50)：\n目标过多，信息超过了私信长度的上限，所以/config里无法携带目标的配置信息，请尝试使用/target_config查看目标配置\n";
-        }
-
-        result += "\n";
+        stringBuilder.Append('\n');
         if (string.IsNullOrEmpty(user.Cookie))
         {
-            result += "cookie：无\n";
+            stringBuilder.Append("cookie：无\n");
         }
         else
         {
-            string cookieMsg = "";
-            if (user.CookieStatus == -1) cookieMsg = "错误或已过期";
-            else if (user.CookieStatus == 0) cookieMsg = "还未被使用";
-            else if (user.CookieStatus == 1) cookieMsg = "直到上次使用还有效";
-            result += $"cookie：有，{cookieMsg}\n";
+            string cookieMsg = user.CookieStatus switch
+            {
+                CookieStatus.Error => "错误或已过期",
+                CookieStatus.Unverified => "还未被使用",
+                CookieStatus.Normal => "直到上次使用还有效",
+                _ => ""
+            };
+            stringBuilder.Append($"cookie：有，{cookieMsg}\n");
         }
 
-
-        string targetMsg = user.Completed == 1 ? "是" : "否";
-        result += $"今日任务是否已完成：{targetMsg}\n";
-        result += $"已用查询次数({user.ConfigNum + 1}/10)\n";
-        return result;
+        string targetMsg = user.Completed ? "是" : "否";
+        stringBuilder.Append($"今日任务是否已完成：{targetMsg}\n");
+        stringBuilder.Append($"已用查询次数({user.ConfigNum + 1}/10)\n");
+        return stringBuilder.ToString();
     }
 
-    public string? GetMessageConfigString(UserModel user)
+    public string? GetAllMessageConfigString(UserModel user)
     {
         long nowTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds();
-        if (user.ConfigNum >= 10 || nowTimestamp - Int64.Parse(user.ConfigTimestamp!) < 60)
+        if (user.ConfigNum >= 10 || nowTimestamp - user.ConfigTimestamp < 60)
         {
             return null;
         }
 
-        if (user.Messages == null)
-        {
-            return null;
-        }
-
-        string result = "";
-        result += $"弹幕({user.Messages.Count}/50)：\n\n";
+        StringBuilder stringBuilder = new();
+        stringBuilder.Append($"弹幕({user.Messages.Count}/50)：\n\n");
         user.Messages.ForEach(message =>
         {
-            result += $"{message.TargetName}：{message.Content}\n";
+            stringBuilder.Append($"{message.TargetName}：{message.Content}\n");
             string statusMsg;
             if (message.Response == null)
             {
@@ -211,42 +194,24 @@ public partial class UserService : IUserService
                 statusMsg = $"已发送，代码:{message.Code}，信息:{(string?)response["message"]}\n";
             }
 
-            result += $"状态：{statusMsg}\n";
+            stringBuilder.Append($"状态：{statusMsg}\n");
         });
 
 
-        return result;
+        return stringBuilder.ToString();
     }
 
-    public List<string>? GetMessageConfigStringSplit(UserModel user)
+    public string? GetSpecifyMessageConfigString(MessageModel message)
     {
-        string? content = GetMessageConfigString(user);
-
-        if (content == null)
-        {
-            return null;
-        }
-
-        return SplitString(content, 400);
-    }
-
-    public async Task<string?> GetMessageConfigStringAsync(UserModel user, string targetUid,
-        CancellationToken cancellationToken = default)
-    {
+        UserModel user = message.UserModel;
         long nowTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds();
-        if (user.ConfigNum >= 10 || nowTimestamp - Int64.Parse(user.ConfigTimestamp!) < 60)
+        if (user.ConfigNum >= 10 || nowTimestamp - user.ConfigTimestamp < 60)
         {
             return null;
         }
 
-        MessageModel? message =
-            await _messageService.GetMessagesByUidAndTargetUid(user.Uid, targetUid, cancellationToken);
-        if (message == null)
-        {
-            return null;
-        }
-
-        string result = $"{message.TargetName}：{message.Content}\n";
+        StringBuilder stringBuilder = new();
+        stringBuilder.Append($"{message.TargetName}：{message.Content}\n");
         string statusMsg;
         if (message.Response == null)
         {
@@ -258,35 +223,13 @@ public partial class UserService : IUserService
             statusMsg = $"已发送，代码:{message.Code}，信息:{(string?)response["message"]}\n";
         }
 
-        result += $"状态：{statusMsg}\n";
-        return result;
+        stringBuilder.Append($"状态：{statusMsg}\n");
+        return stringBuilder.ToString();
     }
 
-    public string? GetTargetConfigString(UserModel user)
+    public List<string>? GetAllMessageConfigStringSplit(UserModel user)
     {
-        long nowTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds();
-        if (user.ConfigNum >= 10 || nowTimestamp - Int64.Parse(user.ConfigTimestamp!) < 60)
-        {
-            return null;
-        }
-
-        if (user.Targets == null)
-        {
-            return null;
-        }
-
-        string result = "";
-        result += $"目标({user.Targets.Count}/50)\n\n";
-        result += "观看时长(分钟)：\n";
-        user.Targets.ForEach(target => { result += $"{target.TargetName}：{target.WatchedSeconds / 60}\n"; });
-        result += "\n";
-
-        return result;
-    }
-
-    public List<string>? GetTargetConfigStringSplit(UserModel user)
-    {
-        string? content = GetTargetConfigString(user);
+        string? content = GetAllMessageConfigString(user);
 
         if (content == null)
         {
@@ -296,27 +239,51 @@ public partial class UserService : IUserService
         return SplitString(content, 400);
     }
 
-    public async Task<string?> GetTargetConfigStringAsync(UserModel user, string targetUid,
-        CancellationToken cancellationToken = default)
+    public string? GetAllTargetConfigString(UserModel user)
     {
         long nowTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds();
-        if (user.ConfigNum >= 10 || nowTimestamp - Int64.Parse(user.ConfigTimestamp!) < 60)
+        if (user.ConfigNum >= 10 || nowTimestamp - user.ConfigTimestamp < 60)
         {
             return null;
         }
 
-        TargetModel? target =
-            await _targetService.GetTargetsByUidAndTargetUidAsync(user.Uid, targetUid, cancellationToken);
-        if (target == null)
+        StringBuilder stringBuilder = new();
+
+        stringBuilder.Append($"目标({user.Targets.Count}/50)\n\n");
+        stringBuilder.Append("观看时长(分钟)：\n");
+        user.Targets.ForEach(target => stringBuilder.Append($"{target.TargetName}：{target.WatchedSeconds / 60}\n"));
+        stringBuilder.Append('\n');
+
+        return stringBuilder.ToString();
+    }
+
+    public string? GetSpecifyTargetConfigString(TargetModel target)
+    {
+        UserModel user = target.UserModel;
+        long nowTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds();
+        if (user.ConfigNum >= 10 || nowTimestamp - user.ConfigTimestamp < 60)
         {
             return null;
         }
 
-        string result = "观看时长(分钟)：\n";
-        result += $"{target.TargetName}：{target.WatchedSeconds / 60}\n";
-        result += "\n";
+        StringBuilder stringBuilder = new();
+        stringBuilder.Append("观看时长(分钟)：\n");
+        stringBuilder.Append($"{target.TargetName}：{target.WatchedSeconds / 60}\n");
+        stringBuilder.Append('\n');
 
-        return result;
+        return stringBuilder.ToString();
+    }
+
+    public List<string>? GetAllTargetConfigStringSplit(UserModel user)
+    {
+        string? content = GetAllTargetConfigString(user);
+
+        if (content == null)
+        {
+            return null;
+        }
+
+        return SplitString(content, 400);
     }
 
     private List<string> SplitString(string config, int maxLength)

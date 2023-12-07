@@ -1,4 +1,4 @@
-using little_heart_bot_3.Models;
+using little_heart_bot_3.Data.Models;
 using Polly;
 
 namespace little_heart_bot_3.Others;

@@ -1,32 +1,37 @@
 ﻿using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using little_heart_bot_3.Models;
+using little_heart_bot_3.Data;
+using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
-using little_heart_bot_3.Repositories;
 using Polly;
 using Polly.Retry;
 using Serilog.Core;
 
 namespace little_heart_bot_3.Services.Implements;
 
-public partial class TargetService : ITargetService
+public class TargetService : ITargetService
 {
     private readonly Logger _logger;
-    private readonly ITargetRepository _targetRepository;
-
+    private readonly LittleHeartDbContext _db;
     private readonly JsonSerializerOptions _options;
+    private readonly HttpClient _httpClient;
 
     private readonly ResiliencePipeline _postEPipeline;
     private readonly ResiliencePipeline _postXPipeline;
     private readonly ResiliencePipeline _getExpPipeline;
 
-    public TargetService(Logger logger, ITargetRepository targetRepository)
+    public TargetService(Logger logger,
+        LittleHeartDbContext db,
+        JsonSerializerOptions options,
+        HttpClient httpClient)
     {
         _logger = logger;
-        _targetRepository = targetRepository;
+        _db = db;
 
-        _options = Globals.JsonSerializerOptions;
+        _options = options;
+        _httpClient = httpClient;
+
 
         _postEPipeline = new ResiliencePipelineBuilder()
             .AddRetry(new RetryStrategyOptions
@@ -98,20 +103,22 @@ public partial class TargetService : ITargetService
             .Build();
     }
 
-    public async Task StartAsync(TargetModel target, string? cookie, string? csrf,
-        CancellationToken cancellationToken = default)
+    public async Task StartAsync(TargetModel target, CancellationToken cancellationToken = default)
     {
-        int? exp = await GetExpAsync(target, cookie, cancellationToken);
+        _db.Targets.Attach(target);
+
+        int? exp = await GetExpAsync(target, cancellationToken);
         if (exp == null)
         {
             //没有粉丝牌或出现了意料之外的错误，直接标记为已完成
-            target.Completed = 1;
-            await SetCompletedAsync(target.Completed, target.Id, cancellationToken);
+            target.Completed = true;
+            await _db.SaveChangesAsync(CancellationToken.None);
             return;
         }
 
         target.Exp = exp.Value;
-        await SetExpAsync(target.Exp, target.Id, cancellationToken);
+        await _db.SaveChangesAsync(CancellationToken.None);
+
 #if DEBUG
         Console.WriteLine($"uid {target.Uid} 在 {target.TargetName} 直播间的经验为 {target.Exp}");
 #endif
@@ -128,13 +135,14 @@ public partial class TargetService : ITargetService
                 target.TargetName,
                 target.WatchedSeconds,
                 target.Exp);
-            target.Completed = 1;
-            await SetCompletedAsync(target.Completed, target.Id, cancellationToken);
+
+            target.Completed = true;
+            await _db.SaveChangesAsync(CancellationToken.None);
             return;
         }
 
         //否则开始观看直播
-        Dictionary<string, string?>? payload = await PostEAsync(target, cookie, csrf, cancellationToken);
+        Dictionary<string, string?>? payload = await PostEAsync(target, cancellationToken);
         if (payload == null)
         {
             return;
@@ -147,21 +155,22 @@ public partial class TargetService : ITargetService
                 target.Uid,
                 target.TargetName,
                 target.TargetName);
-            target.Completed = 1;
-            await SetCompletedAsync(target.Completed, target.Id, cancellationToken);
+
+            target.Completed = true;
+            await _db.SaveChangesAsync(CancellationToken.None);
             return;
         }
 
-        await HeartBeatAsync(target, cookie, payload, cancellationToken);
+        await HeartBeatAsync(target, payload, cancellationToken);
     }
 
-    private async Task<Dictionary<string, string?>?> GetPayloadAsync(TargetModel target, string? csrf,
+    private async Task<Dictionary<string, string?>?> GetPayloadAsync(TargetModel target,
         CancellationToken cancellationToken = default)
     {
         var uri = new Uri(
             $"https://api.live.bilibili.com/xlive/web-room/v1/index/getInfoByRoom?&room_id={target.RoomId}");
 
-        HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+        HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
         {
             Method = HttpMethod.Get,
             RequestUri = uri
@@ -179,7 +188,9 @@ public partial class TargetService : ITargetService
             _logger.ForContext("Response", response.ToJsonString(_options))
                 .Warning("获取uid {uid} 直播间的信息失败",
                     target.TargetUid);
-            await SetCompletedAsync(1, target.Id, cancellationToken);
+
+            target.Completed = true;
+            await _db.SaveChangesAsync(CancellationToken.None);
             return null;
         }
         else if (code != 0)
@@ -192,7 +203,7 @@ public partial class TargetService : ITargetService
 
         int? parentAreaId = (int?)response["data"]!["room_info"]!["parent_area_id"];
         int? areaId = (int?)response["data"]!["room_info"]!["area_id"];
-        var id = new JsonArray { parentAreaId, areaId, 0, int.Parse(target.RoomId!) };
+        var id = new JsonArray { parentAreaId, areaId, 0, target.RoomId };
 
         return new Dictionary<string, string?>
         {
@@ -205,16 +216,16 @@ public partial class TargetService : ITargetService
                 "ua",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.163 Safari/537.36"
             },
-            { "csrf_token", csrf },
-            { "csrf", csrf },
+            { "csrf_token", target.UserModel.Csrf },
+            { "csrf", target.UserModel.Csrf },
             { "visit_id", "" }
         };
     }
 
-    private async Task<Dictionary<string, string?>?> PostEAsync(TargetModel target, string? cookie, string? csrf,
+    private async Task<Dictionary<string, string?>?> PostEAsync(TargetModel target,
         CancellationToken cancellationToken = default)
     {
-        Dictionary<string, string?>? payload = await GetPayloadAsync(target, csrf, cancellationToken);
+        Dictionary<string, string?>? payload = await GetPayloadAsync(target, cancellationToken);
         if (payload == null)
         {
             return null;
@@ -227,11 +238,11 @@ public partial class TargetService : ITargetService
         {
             await _postEPipeline.ExecuteAsync(async ctx =>
             {
-                HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+                HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
                 {
                     Method = HttpMethod.Post,
                     RequestUri = new Uri("https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/E"),
-                    Headers = { { "Cookie", cookie } },
+                    Headers = { { "Cookie", target.UserModel.Cookie } },
                     Content = new FormUrlEncodedContent(payload)
                 }, ctx.CancellationToken);
 
@@ -318,7 +329,7 @@ public partial class TargetService : ITargetService
             { "r", payload["secret_rule"] }
         };
 
-        HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+        HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
         {
             Method = HttpMethod.Post,
             RequestUri = new Uri("http://localhost:3000/enc"),
@@ -334,7 +345,7 @@ public partial class TargetService : ITargetService
         return (string?)response["s"];
     }
 
-    private async Task<bool> PostXAsync(TargetModel target, string? cookie, Dictionary<string, string?> payload,
+    private async Task<bool> PostXAsync(TargetModel target, Dictionary<string, string?> payload,
         CancellationToken cancellationToken = default)
     {
         var context = ResilienceContextPool.Shared.Get(cancellationToken);
@@ -358,12 +369,12 @@ public partial class TargetService : ITargetService
                     { "csrf", payload["csrf"] },
                     { "visit_id", "" }
                 };
-                
-                HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+
+                HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
                 {
                     Method = HttpMethod.Post,
                     RequestUri = new Uri("https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/X"),
-                    Headers = { { "Cookie", cookie } },
+                    Headers = { { "Cookie", target.UserModel.Cookie } },
                     Content = new FormUrlEncodedContent(xPayload)
                 }, ctx.CancellationToken);
                 JsonNode? response =
@@ -470,8 +481,7 @@ public partial class TargetService : ITargetService
         }
     }
 
-    private async Task<int?> GetExpAsync(TargetModel target, string? cookie,
-        CancellationToken cancellationToken = default)
+    private async Task<int?> GetExpAsync(TargetModel target, CancellationToken cancellationToken = default)
     {
         var uri = new Uri(
             $"https://api.live.bilibili.com/xlive/app-ucenter/v1/fansMedal/fans_medal_info?target_id={target.TargetUid}");
@@ -482,11 +492,11 @@ public partial class TargetService : ITargetService
         {
             return await _getExpPipeline.ExecuteAsync(async ctx =>
             {
-                HttpResponseMessage responseMessage = await Globals.HttpClient.SendAsync(new HttpRequestMessage
+                HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
                 {
                     Method = HttpMethod.Get,
                     RequestUri = uri,
-                    Headers = { { "cookie", cookie } }
+                    Headers = { { "cookie", target.UserModel.Cookie } }
                 }, ctx.CancellationToken);
 
                 JsonNode? response =
@@ -551,7 +561,8 @@ public partial class TargetService : ITargetService
                     ex.Reason = Reason.Ban;
                     throw;
                 case Reason.WithoutMedal:
-                    await DeleteAsync(target.Id, cancellationToken);
+                    _db.Remove(target);
+                    await _db.SaveChangesAsync(CancellationToken.None);
                     return null;
                 default:
                     return null;
@@ -588,7 +599,7 @@ public partial class TargetService : ITargetService
         return target is not { Exp: < 1500, WatchedSeconds: < 75 * 60 };
     }
 
-    private async Task HeartBeatAsync(TargetModel target, string? cookie, Dictionary<string, string?> payload,
+    private async Task HeartBeatAsync(TargetModel target, Dictionary<string, string?> payload,
         CancellationToken cancellationToken = default)
     {
         int interval = int.Parse(payload["heartbeat_interval"]!);
@@ -597,7 +608,7 @@ public partial class TargetService : ITargetService
 
         while (true)
         {
-            bool postXSuccess = await PostXAsync(target, cookie, payload, cancellationToken);
+            bool postXSuccess = await PostXAsync(target, payload, cancellationToken);
             if (!postXSuccess)
             {
                 _logger.Verbose("因为 uid {Uid} 给 {TargetName} 发送X心跳包失败，停止继续发包，当前观看时长 {WatchedSeconds} 秒",
@@ -609,7 +620,7 @@ public partial class TargetService : ITargetService
 
             interval = int.Parse(payload["heartbeat_interval"]!);
             target.WatchedSeconds += interval;
-            await SetWatchedSecondsAsync(target.WatchedSeconds, target.Id, cancellationToken);
+            await _db.SaveChangesAsync(CancellationToken.None);
 
             _logger.Verbose("uid {Uid} 给 {TargetName} 发送X心跳包成功，当前观看时长 {WatchedSeconds} 秒",
                 target.Uid,
@@ -621,17 +632,17 @@ public partial class TargetService : ITargetService
             if (target.WatchedSeconds % 300 == 0)
             {
                 //先获取经验
-                int? exp = await GetExpAsync(target, cookie, cancellationToken);
+                int? exp = await GetExpAsync(target, cancellationToken);
                 if (exp == null)
                 {
                     //出现了意料之外的错误，直接标记为已完成
-                    target.Completed = 1;
-                    await SetCompletedAsync(target.Completed, target.Id, cancellationToken);
+                    target.Completed = true;
+                    await _db.SaveChangesAsync(CancellationToken.None);
                     return;
                 }
 
                 target.Exp = exp.Value;
-                await SetExpAsync(target.Exp, target.Id, cancellationToken);
+                await _db.SaveChangesAsync(CancellationToken.None);
                 //再根据经验和观看时长判断是否完成
                 if (IsCompleted(target))
                 {
@@ -640,8 +651,8 @@ public partial class TargetService : ITargetService
                         target.TargetName,
                         target.WatchedSeconds,
                         target.Exp);
-                    target.Completed = 1;
-                    await SetCompletedAsync(target.Completed, target.Id, cancellationToken);
+                    target.Completed = true;
+                    await _db.SaveChangesAsync(CancellationToken.None);
                     return;
                 }
             }
