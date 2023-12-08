@@ -8,6 +8,7 @@ namespace little_heart_bot_3.Services.Implements.Bot;
 public class UserService : Implements.UserService
 {
     public UserService([FromKeyedServices("bot:Logger")] ILogger logger,
+        [FromKeyedServices("bot:LittleHeartDbContext")]
         LittleHeartDbContext db,
         [FromKeyedServices("bot:MessageService")]
         IMessageService messageService,
