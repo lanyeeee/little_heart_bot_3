@@ -9,6 +9,7 @@ namespace little_heart_bot_3.Services.Implements.App;
 public class BotService : Implements.BotService
 {
     public BotService([FromKeyedServices("app:Logger")] ILogger logger,
+        [FromKeyedServices("app:LittleHeartDbContext")]
         LittleHeartDbContext db,
         JsonSerializerOptions options,
         HttpClient httpClient)

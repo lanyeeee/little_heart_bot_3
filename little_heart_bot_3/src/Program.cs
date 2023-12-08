@@ -67,7 +67,9 @@ public static class Program
             .Enrich.WithCaller(true)
             .CreateLogger());
 
-        services.AddScoped<LittleHeartDbContext>();
+        //LittleHeartDbContext
+        services.AddKeyedScoped<LittleHeartDbContext>("app:LittleHeartDbContext");
+        services.AddKeyedScoped<LittleHeartDbContext>("bot:LittleHeartDbContext");
 
         //BotService
         services.AddKeyedScoped<IBotService, Services.Implements.Bot.BotService>("bot:BotService");

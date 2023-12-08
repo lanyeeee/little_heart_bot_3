@@ -23,6 +23,7 @@ public class App
     private readonly ResiliencePipeline _verifyCookiesPipeline;
 
     public App([FromKeyedServices("app:Logger")] ILogger logger,
+        [FromKeyedServices("app:LittleHeartDbContext")]
         LittleHeartDbContext db,
         JsonSerializerOptions options,
         HttpClient httpClient)
@@ -112,7 +113,6 @@ public class App
 
     private async Task VerifyCookiesAsync(CancellationToken cancellationToken)
     {
-        // List<UserModel> users = await _userService.GetUnverifiedUsersAsync(cancellationToken);
         List<UserModel> users = await _db.Users
             .Include(u => u.Messages)
             .Include(u => u.Targets)

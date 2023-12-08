@@ -29,6 +29,7 @@ public class Bot
     public Bot([FromKeyedServices("bot:Logger")] ILogger logger,
         [FromKeyedServices("bot:BotService")] IBotService botService,
         [FromKeyedServices("bot:UserService")] IUserService userService,
+        [FromKeyedServices("bot:LittleHeartDbContext")]
         LittleHeartDbContext db,
         JsonSerializerOptions options,
         HttpClient httpClient)
