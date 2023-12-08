@@ -6,8 +6,29 @@ namespace little_heart_bot_3.Others;
 
 public static class Wbi
 {
-    public static Dictionary<string, string> EncWbi(Dictionary<string, string> parameters, string imgKey, string subKey)
+    private static readonly int[] MixinKeyEncTab =
     {
+        46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49, 33, 9, 42, 19, 29, 28, 14, 39,
+        12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60, 51, 30, 4, 22, 25, 54, 21, 56, 59, 6, 63,
+        57, 62, 11, 36, 20, 34, 44, 52
+    };
+
+    public static async Task<string> GetWbiQueryStringAsync(HttpClient httpClient,
+        Dictionary<string, string>? parameters = null, CancellationToken cancellationToken = default)
+    {
+        var (imgKey, subKey) = await GetWbiKeysAsync(httpClient);
+        Dictionary<string, string> signedParams = EncWbi(imgKey, subKey, parameters);
+
+        string queryString = await new FormUrlEncodedContent(signedParams).ReadAsStringAsync(cancellationToken);
+
+        return queryString;
+    }
+
+    private static Dictionary<string, string> EncWbi(string imgKey, string subKey,
+        Dictionary<string, string>? parameters = null)
+    {
+        parameters ??= new Dictionary<string, string>();
+
         string mixinKey = GetMixinKey(imgKey + subKey);
         string currTime = DateTimeOffset.Now.ToUnixTimeSeconds().ToString();
         //添加 wts 字段
@@ -30,20 +51,7 @@ public static class Wbi
         return parameters;
     }
 
-
-    private static readonly int[] MixinKeyEncTab =
-    {
-        46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49, 33, 9, 42, 19, 29, 28, 14, 39,
-        12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60, 51, 30, 4, 22, 25, 54, 21, 56, 59, 6, 63,
-        57, 62, 11, 36, 20, 34, 44, 52
-    };
-
-    private static string GetMixinKey(string orig)
-    {
-        return MixinKeyEncTab.Aggregate("", (s, i) => s + orig[i])[..32];
-    }
-
-    public static async Task<(string, string)> GetWbiKeysAsync(HttpClient httpClient)
+    private static async Task<(string, string)> GetWbiKeysAsync(HttpClient httpClient)
     {
         HttpResponseMessage responseMessage = await httpClient.SendAsync(new HttpRequestMessage
         {
@@ -59,5 +67,11 @@ public static class Wbi
         string subUrl = (string)response["data"]!["wbi_img"]!["sub_url"]!;
         subUrl = subUrl.Split("/")[^1].Split(".")[0];
         return (imgUrl, subUrl);
+    }
+
+
+    private static string GetMixinKey(string orig)
+    {
+        return MixinKeyEncTab.Aggregate("", (s, i) => s + orig[i])[..32];
     }
 }
