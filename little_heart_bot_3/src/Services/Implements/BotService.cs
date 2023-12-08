@@ -345,6 +345,15 @@ public class BotService : IBotService
         {
             return await _sendMessagePipeline.ExecuteAsync(async _ =>
             {
+                var (imgKey, subKey) = await Wbi.GetWbiKeysAsync(_httpClient);
+                Dictionary<string, string> signedParams = Wbi.EncWbi(
+                    parameters: new Dictionary<string, string> { { "mid", user.Uid.ToString() } },
+                    imgKey: imgKey,
+                    subKey: subKey
+                );
+
+                string queryString = await new FormUrlEncodedContent(signedParams).ReadAsStringAsync(cancellationToken);
+
                 var payload = new Dictionary<string, string?>
                 {
                     { "msg[sender_uid]", bot.Uid.ToString() },
@@ -356,14 +365,17 @@ public class BotService : IBotService
                     { "msg[content]", new JsonObject { { "content", content } }.ToJsonString(_options) },
                     { "csrf", bot.Csrf }
                 };
+
                 HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
                 {
                     Method = HttpMethod.Post,
-                    RequestUri = new Uri("https://api.vc.bilibili.com/web_im/v1/web_im/send_msg"),
+                    RequestUri = new Uri($"https://api.vc.bilibili.com/web_im/v1/web_im/send_msg?{queryString}"),
                     Headers = { { "Cookie", bot.Cookie } },
                     Content = new FormUrlEncodedContent(payload)
                 }, cancellationToken);
+
                 await Task.Delay(1000, cancellationToken);
+
                 JsonNode? response = JsonNode.Parse(await responseMessage.Content.ReadAsStringAsync(cancellationToken));
                 if (response == null)
                 {
