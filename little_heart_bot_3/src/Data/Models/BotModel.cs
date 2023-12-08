@@ -54,7 +54,7 @@ public class BotModelEntityTypeConfiguration : IEntityTypeConfiguration<BotModel
             .HasColumnName("dev_id")
             .HasColumnType("varchar(36)")
             .HasDefaultValue(string.Empty)
-            .HasColumnName("成为小心心bot的用户的dev_id");
+            .HasComment("成为小心心bot的用户的dev_id");
 
         builder.Property(b => b.AppStatus)
             .HasColumnName("app_status")
