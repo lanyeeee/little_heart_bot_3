@@ -152,14 +152,8 @@ public class Bot
     private async Task<JsonNode?> GetRoomDataAsync(UserModel user, long targetUid,
         CancellationToken cancellationToken = default)
     {
-        var (imgKey, subKey) = await Wbi.GetWbiKeysAsync(_httpClient);
-        Dictionary<string, string> signedParams = Wbi.EncWbi(
-            parameters: new Dictionary<string, string> { { "mid", targetUid.ToString() } },
-            imgKey: imgKey,
-            subKey: subKey
-        );
-
-        string queryString = await new FormUrlEncodedContent(signedParams).ReadAsStringAsync(cancellationToken);
+        var parameters = new Dictionary<string, string> { { "mid", _botModel.Uid.ToString() } };
+        string queryString = await Wbi.GetWbiQueryStringAsync(_httpClient, parameters, cancellationToken);
 
         HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
         {

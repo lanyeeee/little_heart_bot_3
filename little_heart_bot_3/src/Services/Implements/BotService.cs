@@ -345,14 +345,8 @@ public class BotService : IBotService
         {
             return await _sendMessagePipeline.ExecuteAsync(async _ =>
             {
-                var (imgKey, subKey) = await Wbi.GetWbiKeysAsync(_httpClient);
-                Dictionary<string, string> signedParams = Wbi.EncWbi(
-                    parameters: new Dictionary<string, string> { { "mid", user.Uid.ToString() } },
-                    imgKey: imgKey,
-                    subKey: subKey
-                );
-
-                string queryString = await new FormUrlEncodedContent(signedParams).ReadAsStringAsync(cancellationToken);
+                string queryString =
+                    await Wbi.GetWbiQueryStringAsync(_httpClient, cancellationToken: cancellationToken);
 
                 var payload = new Dictionary<string, string?>
                 {
