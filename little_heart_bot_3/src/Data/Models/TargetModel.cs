@@ -27,6 +27,9 @@ public class TargetModelEntityTypeConfiguration : IEntityTypeConfiguration<Targe
 
         builder.HasKey(t => t.Id);
 
+        builder.HasIndex(t => new { t.Uid, t.TargetUid })
+            .IsUnique();
+
         builder.HasOne(t => t.UserModel)
             .WithMany(u => u.Targets)
             .HasPrincipalKey(u => u.Uid)

@@ -30,6 +30,9 @@ public class MessageModelEntityTypeConfiguration : IEntityTypeConfiguration<Mess
 
         builder.HasKey(m => m.Id);
 
+        builder.HasIndex(m => new { m.Uid, m.TargetUid })
+            .IsUnique();
+
         builder.HasOne(m => m.UserModel)
             .WithMany(u => u.Messages)
             .HasPrincipalKey(u => u.Uid)
