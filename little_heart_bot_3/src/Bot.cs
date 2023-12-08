@@ -675,6 +675,7 @@ public class Bot
             return;
         }
 
+        //TODO: 2后续看看能不能把这个删了
         _users = await _db.Users
             .Include(u => u.Messages)
             .Include(u => u.Targets)

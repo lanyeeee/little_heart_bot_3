@@ -13,7 +13,6 @@ public static class Globals
 
     public const string DefaultMessageContent = "飘过~";
 
-    //TODO: 2后续看看能不能把这个删了
     public static readonly ServiceProvider ServiceProvider;
 
     static Globals()
