@@ -69,7 +69,7 @@ public class App
                     .Include(u => u.Messages)
                     .Include(u => u.Targets)
                     .AsSplitQuery()
-                    .Where(u => u.Completed && u.CookieStatus == CookieStatus.Normal)
+                    .Where(u => !u.Completed && u.CookieStatus == CookieStatus.Normal)
                     .Take(30)
                     .ToListAsync(cancellationTokenSource.Token);
 
