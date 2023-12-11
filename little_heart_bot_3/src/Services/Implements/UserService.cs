@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using little_heart_bot_3.Data;
 using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Serilog.Core;
 
@@ -75,7 +76,15 @@ public class UserService : IUserService
                 continue; //已完成的任务就跳过
             }
 
-            tasks.Add(_targetService.StartAsync(target, cancellationToken));
+            var task = Task.Run(async () =>
+            {
+                await using var scope = Globals.ServiceProvider.CreateAsyncScope();
+                var targetService = scope.ServiceProvider.GetRequiredKeyedService<ITargetService>("app:TargetService");
+
+                await targetService.StartAsync(target, cancellationToken);
+            }, cancellationToken);
+
+            tasks.Add(task);
             _logger.Verbose("uid {Uid} 开始观看 {TargetName} 的直播",
                 user.Uid, target.TargetName);
 
