@@ -7,7 +7,6 @@ using little_heart_bot_3.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
-using Serilog.Core;
 
 namespace little_heart_bot_3;
 
@@ -24,7 +23,6 @@ public class Bot
     private int _talkNum;
     private long _midnight; //今天0点的分钟时间戳
     private readonly BotModel _botModel;
-    private Dictionary<long, UserModel> _users = new();
 
     public Bot([FromKeyedServices("bot:Logger")] ILogger logger,
         [FromKeyedServices("bot:BotService")] IBotService botService,
@@ -670,13 +668,6 @@ public class Bot
             return;
         }
 
-        //TODO: 2后续看看能不能把这个删了
-        _users = await _db.Users
-            .Include(u => u.Messages)
-            .Include(u => u.Targets)
-            .AsSplitQuery()
-            .ToDictionaryAsync(user => user.Uid, user => user, cancellationToken);
-
         foreach (var session in sessionList)
         {
             if (session == null)
@@ -704,7 +695,10 @@ public class Bot
                 continue;
             }
 
-            _users.TryGetValue(uid, out var user);
+            var user = await _db.Users
+                .Include(u => u.Messages)
+                .Include(u => u.Targets)
+                .FirstOrDefaultAsync(u => u.Uid == uid, cancellationToken);
 
             if (user == null) //新用户
             {
@@ -720,7 +714,6 @@ public class Bot
                 IEnumerable<JsonNode?>? messages =
                     await _botService.GetMessagesAsync(_botModel, user, cancellationToken);
 
-                _users.Add(uid, user);
                 await _db.Users.AddAsync(user, CancellationToken.None);
                 await _db.SaveChangesAsync(CancellationToken.None);
 
