@@ -5,14 +5,41 @@ namespace little_heart_bot_3.Services;
 
 public interface IBotService
 {
-    public Task<IEnumerable<JsonNode?>?> GetSessionListAsync(BotModel botModel,
+    /// <summary>
+    /// 获取bot的私信列表
+    /// </summary>
+    /// <param name="bot"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    public Task<IEnumerable<JsonNode?>?> GetSessionListAsync(BotModel bot,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// 获取bot与user之间的私信记录
+    /// </summary>
+    /// <param name="bot"></param>
+    /// <param name="user"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
     public Task<IEnumerable<JsonNode?>?> GetMessagesAsync(BotModel bot, UserModel user,
         CancellationToken cancellationToken = default);
 
-    public Task UpdateSignAsync(BotModel botModel, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// 更新签名
+    /// </summary>
+    /// <param name="bot"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    public Task UpdateSignAsync(BotModel bot, CancellationToken cancellationToken = default);
 
-    public Task<bool> SendMessageAsync(BotModel botModel, string content, UserModel user,
+    /// <summary>
+    /// bot向user发送私信，内容为content
+    /// </summary>
+    /// <param name="bot"></param>
+    /// <param name="content"></param>
+    /// <param name="user"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    public Task<bool> SendMessageAsync(BotModel bot, string content, UserModel user,
         CancellationToken cancellationToken = default);
 }

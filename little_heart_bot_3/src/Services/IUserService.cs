@@ -4,8 +4,20 @@ namespace little_heart_bot_3.Services;
 
 public interface IUserService
 {
+    /// <summary>
+    /// 发送user的所有弹幕
+    /// </summary>
+    /// <param name="user"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
     public Task SendMessageAsync(UserModel user, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// 观看user对应的直播间
+    /// </summary>
+    /// <param name="user"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
     public Task WatchLiveAsync(UserModel user, CancellationToken cancellationToken = default);
 
     /// <summary>
