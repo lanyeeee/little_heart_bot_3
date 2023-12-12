@@ -227,15 +227,11 @@ public class Bot
                 return;
             case "/target_set":
             {
-                string targetUidString = parameter;
-                int targetCount = user.Targets.Count;
-
-                if (!targetUidString.IsNumeric() || targetCount > 50)
+                bool parameterIsUid = long.TryParse(parameter, out var targetUid);
+                if (!parameterIsUid || user.Targets.Count > 50)
                 {
                     return;
                 }
-
-                long targetUid = long.Parse(targetUidString);
 
                 JsonNode? data = await GetRoomDataAsync(user, targetUid, cancellationToken);
                 if (data == null)
@@ -307,13 +303,12 @@ public class Bot
             }
             case "/target_delete":
             {
-                string targetUidString = parameter;
-                if (!targetUidString.IsNumeric())
+                bool parameterIsUid = long.TryParse(parameter, out var targetUid);
+                if (!parameterIsUid)
                 {
                     return;
                 }
 
-                long targetUid = long.Parse(targetUidString);
                 TargetModel? target = user.Targets.FirstOrDefault(t => t.TargetUid == targetUid);
                 if (target != null)
                 {
@@ -334,14 +329,13 @@ public class Bot
                 }
 
                 string targetUidString = pair[0].Trim();
+                bool targetUidStringIsUid = long.TryParse(targetUidString, out var targetUid);
                 string content = pair[1].Trim();
                 int messageCount = user.Messages.Count;
-                if (!targetUidString.IsNumeric() || content.Length > 20 || messageCount > 50)
+                if (!targetUidStringIsUid || content.Length > 20 || messageCount > 50)
                 {
                     return;
                 }
-
-                long targetUid = long.Parse(targetUidString);
 
                 MessageModel? message = user.Messages.FirstOrDefault(m => m.TargetUid == targetUid);
                 if (message != null)
@@ -403,13 +397,11 @@ public class Bot
             }
             case "/message_delete":
             {
-                string targetUidString = parameter;
-                if (!targetUidString.IsNumeric())
+                bool parameterIsUid = long.TryParse(parameter, out var targetUid);
+                if (!parameterIsUid)
                 {
                     return;
                 }
-
-                long targetUid = long.Parse(targetUidString);
 
                 MessageModel? message = user.Messages.FirstOrDefault(m => m.TargetUid == targetUid);
                 if (message is null)
@@ -466,45 +458,28 @@ public class Bot
                 await SendMessageAsync(content, user, cancellationToken);
                 break;
             }
-            case "/message_config" when parameter == null:
+            case "/message_config" when parameter == "all":
             {
-                string? content = _userService.GetAllMessageConfigString(user);
-                if (content == null)
+                List<string>? contents = _userService.GetAllMessageConfigStringSplit(user);
+                if (contents == null)
                 {
                     return;
                 }
 
-                if (content.Length > 450)
+                foreach (string message in contents)
                 {
-                    content =
-                        "设置的弹幕过多，配置信息长度大于500，超过了私信长度的上限，无法发送\n\n请尝试使用\n/message_config 目标uid\n进行单个查询\n\n或者使用/message_config all\n获取分段的完整配置信息(每段消耗一次查询次数)";
+                    string content = message + $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
+                    await SendMessageAsync(content, user, cancellationToken);
+                    await Task.Delay(1000, cancellationToken);
                 }
 
-                content += $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
-                await SendMessageAsync(content, user, cancellationToken);
                 break;
             }
             case "/message_config":
             {
-                parameter = parameter.Trim();
-                if (parameter == "all")
+                bool parameterIsUid = long.TryParse(parameter, out var targetUid);
+                if (parameterIsUid)
                 {
-                    List<string>? contents = _userService.GetAllMessageConfigStringSplit(user);
-                    if (contents == null)
-                    {
-                        return;
-                    }
-
-                    foreach (string message in contents)
-                    {
-                        string content = message + $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
-                        await SendMessageAsync(content, user, cancellationToken);
-                        await Task.Delay(1000, cancellationToken);
-                    }
-                }
-                else
-                {
-                    long targetUid = long.Parse(parameter);
                     MessageModel? message = user.Messages.FirstOrDefault(m => m.TargetUid == targetUid);
                     if (message == null)
                     {
@@ -520,48 +495,48 @@ public class Bot
                     content += $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
                     await SendMessageAsync(content, user, cancellationToken);
                 }
-
-                break;
-            }
-            case "/target_config" when parameter == null:
-            {
-                string? content = _userService.GetAllTargetConfigString(user);
-                if (content == null)
+                else
                 {
-                    return;
-                }
-
-                if (content.Length > 450)
-                {
-                    content =
-                        "设置的目标过多，配置信息长度大于500，超过了私信长度的上限，无法发送\n\n请尝试使用\n/target_config 目标uid\n进行单个查询\n\n或者使用\n/target_config all\n获取分段的完整配置信息(每段消耗一次查询次数)\n";
-                }
-
-                content += $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
-                await SendMessageAsync(content, user, cancellationToken);
-                break;
-            }
-            case "/target_config":
-            {
-                parameter = parameter.Trim();
-                if (parameter == "all")
-                {
-                    List<string>? contents = _userService.GetAllTargetConfigStringSplit(user);
-                    if (contents == null)
+                    string? content = _userService.GetAllMessageConfigString(user);
+                    if (content == null)
                     {
                         return;
                     }
 
-                    foreach (string message in contents)
+                    if (content.Length > 450)
                     {
-                        string content = message + $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
-                        await SendMessageAsync(content, user, cancellationToken);
-                        await Task.Delay(1000, cancellationToken);
+                        content =
+                            "设置的弹幕过多，配置信息长度大于500，超过了私信长度的上限，无法发送\n\n请尝试使用\n/message_config 目标uid\n进行单个查询\n\n或者使用/message_config all\n获取分段的完整配置信息(每段消耗一次查询次数)";
                     }
+
+                    content += $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
+                    await SendMessageAsync(content, user, cancellationToken);
                 }
-                else
+
+                break;
+            }
+            case "/target_config" when parameter == "all":
+            {
+                List<string>? contents = _userService.GetAllTargetConfigStringSplit(user);
+                if (contents == null)
                 {
-                    long targetUid = long.Parse(parameter);
+                    return;
+                }
+
+                foreach (string message in contents)
+                {
+                    string content = message + $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
+                    await SendMessageAsync(content, user, cancellationToken);
+                    await Task.Delay(1000, cancellationToken);
+                }
+
+                break;
+            }
+            case "/target_config":
+            {
+                bool parameterIsUid = long.TryParse(parameter, out var targetUid);
+                if (parameterIsUid)
+                {
                     TargetModel? target = user.Targets.FirstOrDefault(t => t.TargetUid == targetUid);
                     if (target == null)
                     {
@@ -572,6 +547,23 @@ public class Bot
                     if (content == null)
                     {
                         return;
+                    }
+
+                    content += $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
+                    await SendMessageAsync(content, user, cancellationToken);
+                }
+                else
+                {
+                    string? content = _userService.GetAllTargetConfigString(user);
+                    if (content == null)
+                    {
+                        return;
+                    }
+
+                    if (content.Length > 450)
+                    {
+                        content =
+                            "设置的目标过多，配置信息长度大于500，超过了私信长度的上限，无法发送\n\n请尝试使用\n/target_config 目标uid\n进行单个查询\n\n或者使用\n/target_config all\n获取分段的完整配置信息(每段消耗一次查询次数)\n";
                     }
 
                     content += $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
