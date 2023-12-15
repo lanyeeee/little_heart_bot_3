@@ -1,11 +1,9 @@
 ﻿using System.Text.Encodings.Web;
 using System.Text.Json;
 using little_heart_bot_3.Data;
-using little_heart_bot_3.Others;
 using little_heart_bot_3.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
-using Serilog.Core;
 using Serilog.Enrichers.WithCaller;
 using Serilog.Templates;
 
@@ -19,8 +17,9 @@ public static class Program
 #if DEBUG
         await Test();
 #endif
-        App app = Globals.ServiceProvider.GetRequiredService<App>();
-        Bot bot = Globals.ServiceProvider.GetRequiredService<Bot>();
+        var provider = ConfigService();
+        App app = provider.GetRequiredService<App>();
+        Bot bot = provider.GetRequiredService<Bot>();
         Console.WriteLine("Running...");
         await Task.WhenAll(app.Main(), bot.Main());
     }
@@ -87,6 +86,7 @@ public static class Program
         services.AddSingleton<Bot>();
         services.AddSingleton<App>();
 
+        services.AddSingleton<IServiceProvider>(provider => provider);
         return services.BuildServiceProvider();
     }
 }
