@@ -1,3 +1,4 @@
+using System.Text.Json;
 using little_heart_bot_3.Data;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
@@ -13,8 +14,10 @@ public class UserService : Implements.UserService
         IMessageService messageService,
         [FromKeyedServices("bot:TargetService")]
         ITargetService targetService,
+        JsonSerializerOptions options,
+        HttpClient httpClient,
         IServiceProvider provider)
-        : base(logger, db, messageService, targetService, provider)
+        : base(logger, db, messageService, targetService, options, httpClient, provider)
     {
     }
 }

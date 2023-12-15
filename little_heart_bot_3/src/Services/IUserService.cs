@@ -1,4 +1,5 @@
-﻿using little_heart_bot_3.Data.Models;
+﻿using System.Text.Json.Nodes;
+using little_heart_bot_3.Data.Models;
 
 namespace little_heart_bot_3.Services;
 
@@ -19,6 +20,16 @@ public interface IUserService
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     public Task WatchLiveAsync(UserModel user, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 通过user去获取uid对应用户的详细信息
+    /// </summary>
+    /// <param name="user">主动进行信息获取的user</param>
+    /// <param name="uid">被获取信息的用户uid</param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    public Task<JsonNode?> GetOtherUserInfoAsync(UserModel user, long uid,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 对应/config_all命令
