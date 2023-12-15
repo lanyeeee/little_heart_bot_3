@@ -5,12 +5,12 @@ using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
-using Serilog.Core;
 
 namespace little_heart_bot_3.Services.Implements;
 
 public class UserService : IUserService
 {
+    private readonly IServiceProvider _provider;
     private readonly ILogger _logger;
     private readonly LittleHeartDbContext _db;
     private readonly IMessageService _messageService;
@@ -20,12 +20,14 @@ public class UserService : IUserService
     public UserService(ILogger logger,
         LittleHeartDbContext db,
         IMessageService messageService,
-        ITargetService targetService)
+        ITargetService targetService,
+        IServiceProvider provider)
     {
         _logger = logger;
         _db = db;
         _messageService = messageService;
         _targetService = targetService;
+        _provider = provider;
     }
 
     public async Task SendMessageAsync(UserModel user, CancellationToken cancellationToken = default)
@@ -78,7 +80,7 @@ public class UserService : IUserService
 
             var task = Task.Run(async () =>
             {
-                await using var scope = Globals.ServiceProvider.CreateAsyncScope();
+                await using var scope = _provider.CreateAsyncScope();
                 var targetService = scope.ServiceProvider.GetRequiredKeyedService<ITargetService>("app:TargetService");
 
                 await targetService.StartAsync(target, cancellationToken);

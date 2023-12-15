@@ -9,12 +9,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Polly;
 using Polly.Retry;
 using Serilog;
-using Serilog.Core;
 
 namespace little_heart_bot_3;
 
 public class App
 {
+    private readonly IServiceProvider _provider;
     private readonly ILogger _logger;
     private readonly LittleHeartDbContext _db;
     private readonly JsonSerializerOptions _options;
@@ -26,13 +26,15 @@ public class App
         [FromKeyedServices("app:LittleHeartDbContext")]
         LittleHeartDbContext db,
         JsonSerializerOptions options,
-        HttpClient httpClient)
+        HttpClient httpClient,
+        IServiceProvider provider)
     {
         _logger = logger;
         _db = db;
 
         _options = options;
         _httpClient = httpClient;
+        _provider = provider;
 
         _verifyCookiesPipeline = new ResiliencePipelineBuilder()
             .AddRetry(new RetryStrategyOptions
@@ -158,15 +160,13 @@ public class App
                     else if (code == -101)
                     {
                         _logger.ForContext("Response", response.ToJsonString(_options))
-                            .Error("uid {uid} 提供的cookie错误或已过期",
-                                user.Uid);
+                            .Information("uid {uid} 提供的cookie错误或已过期", user.Uid);
                         throw new LittleHeartException(Reason.CookieExpired);
                     }
                     else
                     {
                         _logger.ForContext("Response", response.ToJsonString(_options))
-                            .Error("uid {uid} 验证cookie时出现预料之外的错误",
-                                user.Uid);
+                            .Error("uid {uid} 验证cookie时出现预料之外的错误", user.Uid);
                         user.CookieStatus = CookieStatus.Error;
                         await _db.SaveChangesAsync(CancellationToken.None);
                     }
@@ -215,7 +215,7 @@ public class App
         {
             var task = Task.Run(async () =>
             {
-                await using var scope = Globals.ServiceProvider.CreateAsyncScope();
+                await using var scope = _provider.CreateAsyncScope();
                 var userService = scope.ServiceProvider.GetRequiredKeyedService<IUserService>("app:UserService");
 
                 await userService.SendMessageAsync(user, cancellationToken);
@@ -241,7 +241,7 @@ public class App
         {
             var task = Task.Run(async () =>
             {
-                await using var scope = Globals.ServiceProvider.CreateAsyncScope();
+                await using var scope = _provider.CreateAsyncScope();
                 var userService = scope.ServiceProvider.GetRequiredKeyedService<IUserService>("app:UserService");
 
                 await userService.WatchLiveAsync(user, cancellationToken);
