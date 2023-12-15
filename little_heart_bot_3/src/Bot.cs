@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using little_heart_bot_3.Data;
 using little_heart_bot_3.Data.Models;
@@ -16,21 +15,17 @@ public class Bot
     private readonly IBotService _botService;
     private readonly IUserService _userService;
     private readonly LittleHeartDbContext _db;
-    private readonly JsonSerializerOptions _options;
-    private readonly HttpClient _httpClient;
 
     private bool _talking = true;
     private int _talkNum;
-    private long _midnight; //今天0点的分钟时间戳
+    private long _yesterdayMidnightTimestamp; //今天0点的分钟时间戳
     private readonly BotModel _botModel;
 
     public Bot([FromKeyedServices("bot:Logger")] ILogger logger,
         [FromKeyedServices("bot:BotService")] IBotService botService,
         [FromKeyedServices("bot:UserService")] IUserService userService,
         [FromKeyedServices("bot:LittleHeartDbContext")]
-        LittleHeartDbContext db,
-        JsonSerializerOptions options,
-        HttpClient httpClient)
+        LittleHeartDbContext db)
     {
         _logger = logger;
         _botService = botService;
@@ -38,7 +33,7 @@ public class Bot
         _db = db;
 
         DateTimeOffset today = DateTime.Today;
-        _midnight = today.ToUnixTimeSeconds();
+        _yesterdayMidnightTimestamp = today.ToUnixTimeSeconds();
 
         BotModel? botModel = _db.Bots.SingleOrDefault();
         if (botModel == null)
@@ -52,9 +47,6 @@ public class Bot
         Globals.AppStatus = _botModel.AppStatus;
         Globals.SendStatus = _botModel.SendStatus;
         Globals.ReceiveStatus = _botModel.ReceiveStatus;
-
-        _options = options;
-        _httpClient = httpClient;
     }
 
     public async Task Main()
@@ -113,7 +105,7 @@ public class Bot
 
     private async Task CheckNewDayAsync()
     {
-        if (DateTimeOffset.Now.ToUnixTimeSeconds() - _midnight < 24 * 60 * 60 + 3 * 60)
+        if (!IsNewDay())
         {
             return;
         }
@@ -121,8 +113,9 @@ public class Bot
         //新的一天要把一些数据重置
         _talking = true;
         _talkNum = 0;
+        //记录下今天零点的时间戳
         DateTimeOffset today = DateTime.Today;
-        _midnight = today.ToUnixTimeSeconds();
+        _yesterdayMidnightTimestamp = today.ToUnixTimeSeconds();
 
         await foreach (var message in _db.Messages)
         {
@@ -147,59 +140,11 @@ public class Bot
         await _db.SaveChangesAsync(CancellationToken.None);
     }
 
-    private async Task<JsonNode?> GetRoomDataAsync(UserModel user, long targetUid,
-        CancellationToken cancellationToken = default)
+    private bool IsNewDay()
     {
-        var parameters = new Dictionary<string, string> { { "mid", _botModel.Uid.ToString() } };
-        string queryString = await Wbi.GetWbiQueryStringAsync(_httpClient, parameters, cancellationToken);
-
-        HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
-        {
-            Method = HttpMethod.Get,
-            RequestUri = new Uri($"https://api.bilibili.com/x/space/wbi/acc/info?{queryString}"),
-            Headers =
-            {
-                {
-                    "user-agent",
-                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36"
-                },
-                { "cookie", user.Cookie }
-            },
-        }, cancellationToken);
-        await Task.Delay(1000, cancellationToken);
-
-        JsonNode? response = JsonNode.Parse(await responseMessage.Content.ReadAsStringAsync(cancellationToken));
-        if (response == null)
-        {
-            throw new LittleHeartException(Reason.NullResponse);
-        }
-
-        int code = (int)response["code"]!;
-
-        if (code is -400 or -404)
-        {
-            _logger.Error(new Exception(response.ToJsonString(_options)),
-                "uid {uid} 获取 {targetUid} 的直播间数据失败",
-                user.Uid,
-                targetUid);
-            return null;
-        }
-
-        if (code != 0)
-        {
-            _logger.Error(new Exception(response.ToJsonString(_options)),
-                "uid {uid} 获取 {targetUid} 的直播间数据失败",
-                user.Uid,
-                targetUid);
-            throw new LittleHeartException(Reason.Ban);
-        }
-
-        return response["data"];
-    }
-
-    private string GetCsrf(string cookie)
-    {
-        return cookie.Substring(cookie.IndexOf("bili_jct=", StringComparison.Ordinal) + 9, 32);
+        var now = DateTimeOffset.Now.ToUnixTimeSeconds();
+        // +180s是为了稍微延后一点，防止B站服务端数据没更新
+        return now - _yesterdayMidnightTimestamp >= Globals.TotalSecondInOneDay + 180;
     }
 
     private async Task SendMessageAsync(string content, UserModel user, CancellationToken cancellationToken = default)
@@ -233,7 +178,7 @@ public class Bot
                     return;
                 }
 
-                JsonNode? data = await GetRoomDataAsync(user, targetUid, cancellationToken);
+                JsonNode? data = await _userService.GetOtherUserInfoAsync(user, targetUid, cancellationToken);
                 if (data == null)
                 {
                     return;
@@ -348,7 +293,7 @@ public class Bot
                 }
                 else
                 {
-                    JsonNode? data = await GetRoomDataAsync(user, targetUid, cancellationToken);
+                    JsonNode? data = await _userService.GetOtherUserInfoAsync(user, targetUid, cancellationToken);
                     if (data == null)
                     {
                         return;
@@ -433,7 +378,7 @@ public class Bot
                 try
                 {
                     user.Cookie = parameter.Replace("\n", "");
-                    user.Csrf = GetCsrf(user.Cookie);
+                    user.Csrf = Globals.GetCsrf(user.Cookie);
                     user.CookieStatus = 0;
                     await _db.SaveChangesAsync(CancellationToken.None);
                 }

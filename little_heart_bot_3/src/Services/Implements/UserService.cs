@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using little_heart_bot_3.Data;
 using little_heart_bot_3.Data.Models;
@@ -15,18 +16,24 @@ public class UserService : IUserService
     private readonly LittleHeartDbContext _db;
     private readonly IMessageService _messageService;
     private readonly ITargetService _targetService;
+    private readonly HttpClient _httpClient;
+    private readonly JsonSerializerOptions _options;
 
 
     public UserService(ILogger logger,
         LittleHeartDbContext db,
         IMessageService messageService,
         ITargetService targetService,
+        JsonSerializerOptions options,
+        HttpClient httpClient,
         IServiceProvider provider)
     {
         _logger = logger;
         _db = db;
         _messageService = messageService;
         _targetService = targetService;
+        _options = options;
+        _httpClient = httpClient;
         _provider = provider;
     }
 
@@ -137,6 +144,56 @@ public class UserService : IUserService
                     throw;
             }
         }
+    }
+
+    public async Task<JsonNode?> GetOtherUserInfoAsync(UserModel user, long uid,
+        CancellationToken cancellationToken = default)
+    {
+        var parameters = new Dictionary<string, string> { { "mid", uid.ToString() } };
+        string queryString = await Wbi.GetWbiQueryStringAsync(_httpClient, parameters, cancellationToken);
+
+        HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
+        {
+            Method = HttpMethod.Get,
+            RequestUri = new Uri($"https://api.bilibili.com/x/space/wbi/acc/info?{queryString}"),
+            Headers =
+            {
+                {
+                    "user-agent",
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36"
+                },
+                { "cookie", user.Cookie }
+            },
+        }, cancellationToken);
+        await Task.Delay(1000, cancellationToken);
+
+        JsonNode? response = JsonNode.Parse(await responseMessage.Content.ReadAsStringAsync(cancellationToken));
+        if (response == null)
+        {
+            throw new LittleHeartException(Reason.NullResponse);
+        }
+
+        int code = (int)response["code"]!;
+
+        if (code is -400 or -404)
+        {
+            _logger.Error(new Exception(response.ToJsonString(_options)),
+                "uid {uid} 获取 {targetUid} 的直播间数据失败",
+                user.Uid,
+                uid);
+            return null;
+        }
+
+        if (code != 0)
+        {
+            _logger.Error(new Exception(response.ToJsonString(_options)),
+                "uid {uid} 获取 {targetUid} 的直播间数据失败",
+                user.Uid,
+                uid);
+            throw new LittleHeartException(Reason.Ban);
+        }
+
+        return response["data"];
     }
 
     public string? GetConfigAllString(UserModel user)
