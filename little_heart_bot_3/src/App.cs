@@ -16,21 +16,18 @@ public class App
 {
     private readonly IServiceProvider _provider;
     private readonly ILogger _logger;
-    private readonly LittleHeartDbContext _db;
+    private LittleHeartDbContext _db = null!;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
 
     private readonly ResiliencePipeline _verifyCookiesPipeline;
 
     public App([FromKeyedServices("app:Logger")] ILogger logger,
-        [FromKeyedServices("app:LittleHeartDbContext")]
-        LittleHeartDbContext db,
         JsonSerializerOptions options,
         HttpClient httpClient,
         IServiceProvider provider)
     {
         _logger = logger;
-        _db = db;
 
         _options = options;
         _httpClient = httpClient;
@@ -64,6 +61,7 @@ public class App
         while (true)
         {
             using var cancellationTokenSource = new CancellationTokenSource();
+            _db = new();
             try
             {
                 await VerifyCookiesAsync(cancellationTokenSource.Token);

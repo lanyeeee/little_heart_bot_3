@@ -13,25 +13,19 @@ public class UserService : IUserService
 {
     private readonly IServiceProvider _provider;
     private readonly ILogger _logger;
-    private readonly LittleHeartDbContext _db;
     private readonly IMessageService _messageService;
-    private readonly ITargetService _targetService;
     private readonly HttpClient _httpClient;
     private readonly JsonSerializerOptions _options;
 
 
     public UserService(ILogger logger,
-        LittleHeartDbContext db,
         IMessageService messageService,
-        ITargetService targetService,
         JsonSerializerOptions options,
         HttpClient httpClient,
         IServiceProvider provider)
     {
         _logger = logger;
-        _db = db;
         _messageService = messageService;
-        _targetService = targetService;
         _options = options;
         _httpClient = httpClient;
         _provider = provider;
@@ -39,6 +33,9 @@ public class UserService : IUserService
 
     public async Task SendMessageAsync(UserModel user, CancellationToken cancellationToken = default)
     {
+        var db = new LittleHeartDbContext();
+        db.Attach(user);
+
         foreach (var message in user.Messages)
         {
             try
@@ -57,8 +54,8 @@ public class UserService : IUserService
                     case Reason.CookieExpired:
                         _logger.Warning("uid {Uid} 的cookie已过期", message.Uid);
                         user.CookieStatus = CookieStatus.Error;
-                        _db.Users.Update(user);
-                        await _db.SaveChangesAsync(cancellationToken);
+                        db.Users.Update(user);
+                        await db.SaveChangesAsync(cancellationToken);
                         //Cookie过期，不用再发了，直接返回，这个task正常结束
                         return;
                     case Reason.Ban:
@@ -71,7 +68,8 @@ public class UserService : IUserService
 
     public async Task WatchLiveAsync(UserModel user, CancellationToken cancellationToken = default)
     {
-        _db.Users.Attach(user);
+        var db = new LittleHeartDbContext();
+        db.Users.Attach(user);
 
         //TODO: 改用Semaphore限制
         int maxCountPerRound = 10; //每个用户每轮最多同时观看多少个直播
@@ -127,7 +125,7 @@ public class UserService : IUserService
             //如果所有任务都完成了
             _logger.Information("uid {Uid} 今日的所有任务已完成", user.Uid);
             user.Completed = true;
-            await _db.SaveChangesAsync(CancellationToken.None);
+            await db.SaveChangesAsync(CancellationToken.None);
         }
         catch (LittleHeartException ex)
         {
@@ -136,7 +134,7 @@ public class UserService : IUserService
                 case Reason.CookieExpired:
                     _logger.Warning("uid {Uid} 的cookie已过期", user.Uid);
                     user.CookieStatus = CookieStatus.Error;
-                    await _db.SaveChangesAsync(CancellationToken.None);
+                    await db.SaveChangesAsync(CancellationToken.None);
                     //Cookie过期，不用再看，直接返回，这个task正常结束
                     return;
                 case Reason.Ban:

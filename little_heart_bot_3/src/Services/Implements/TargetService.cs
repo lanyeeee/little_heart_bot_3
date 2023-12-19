@@ -7,14 +7,12 @@ using little_heart_bot_3.Others;
 using Polly;
 using Polly.Retry;
 using Serilog;
-using Serilog.Core;
 
 namespace little_heart_bot_3.Services.Implements;
 
 public class TargetService : ITargetService
 {
     private readonly ILogger _logger;
-    private readonly LittleHeartDbContext _db;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
 
@@ -23,12 +21,10 @@ public class TargetService : ITargetService
     private readonly ResiliencePipeline _getExpPipeline;
 
     public TargetService(ILogger logger,
-        LittleHeartDbContext db,
         JsonSerializerOptions options,
         HttpClient httpClient)
     {
         _logger = logger;
-        _db = db;
 
         _options = options;
         _httpClient = httpClient;
@@ -106,19 +102,20 @@ public class TargetService : ITargetService
 
     public async Task StartAsync(TargetModel target, CancellationToken cancellationToken = default)
     {
-        _db.Targets.Attach(target);
+        var db = new LittleHeartDbContext();
+        db.Targets.Attach(target);
 
         int? exp = await GetExpAsync(target, cancellationToken);
         if (exp == null)
         {
             //没有粉丝牌或出现了意料之外的错误，直接标记为已完成
             target.Completed = true;
-            await _db.SaveChangesAsync(CancellationToken.None);
+            await db.SaveChangesAsync(CancellationToken.None);
             return;
         }
 
         target.Exp = exp.Value;
-        await _db.SaveChangesAsync(CancellationToken.None);
+        await db.SaveChangesAsync(CancellationToken.None);
 
 #if DEBUG
         Console.WriteLine($"uid {target.Uid} 在 {target.TargetName} 直播间的经验为 {target.Exp}");
@@ -138,7 +135,7 @@ public class TargetService : ITargetService
                 target.Exp);
 
             target.Completed = true;
-            await _db.SaveChangesAsync(CancellationToken.None);
+            await db.SaveChangesAsync(CancellationToken.None);
             return;
         }
 
@@ -158,9 +155,11 @@ public class TargetService : ITargetService
                 target.TargetName);
 
             target.Completed = true;
-            await _db.SaveChangesAsync(CancellationToken.None);
+            await db.SaveChangesAsync(CancellationToken.None);
             return;
         }
+
+        await db.DisposeAsync();
 
         await HeartBeatAsync(target, payload, cancellationToken);
     }
@@ -168,6 +167,9 @@ public class TargetService : ITargetService
     private async Task<Dictionary<string, string?>?> GetPayloadAsync(TargetModel target,
         CancellationToken cancellationToken = default)
     {
+        var db = new LittleHeartDbContext();
+        db.Attach(target);
+
         var uri = new Uri(
             $"https://api.live.bilibili.com/xlive/web-room/v1/index/getInfoByRoom?&room_id={target.RoomId}");
 
@@ -191,7 +193,7 @@ public class TargetService : ITargetService
                     target.TargetUid);
 
             target.Completed = true;
-            await _db.SaveChangesAsync(CancellationToken.None);
+            await db.SaveChangesAsync(CancellationToken.None);
             return null;
         }
         else if (code != 0)
@@ -562,8 +564,9 @@ public class TargetService : ITargetService
                     ex.Reason = Reason.Ban;
                     throw;
                 case Reason.WithoutMedal:
-                    _db.Remove(target);
-                    await _db.SaveChangesAsync(CancellationToken.None);
+                    var db = new LittleHeartDbContext();
+                    db.Remove(target);
+                    await db.SaveChangesAsync(CancellationToken.None);
                     return null;
                 default:
                     return null;
@@ -620,8 +623,10 @@ public class TargetService : ITargetService
             }
 
             interval = int.Parse(payload["heartbeat_interval"]!);
+            var db = new LittleHeartDbContext();
+            db.Attach(target);
             target.WatchedSeconds += interval;
-            await _db.SaveChangesAsync(CancellationToken.None);
+            await db.SaveChangesAsync(CancellationToken.None);
 
             _logger.Verbose("uid {Uid} 给 {TargetName} 发送X心跳包成功，当前观看时长 {WatchedSeconds} 秒",
                 target.Uid,
@@ -638,12 +643,12 @@ public class TargetService : ITargetService
                 {
                     //出现了意料之外的错误，直接标记为已完成
                     target.Completed = true;
-                    await _db.SaveChangesAsync(CancellationToken.None);
+                    await db.SaveChangesAsync(CancellationToken.None);
                     return;
                 }
 
                 target.Exp = exp.Value;
-                await _db.SaveChangesAsync(CancellationToken.None);
+                await db.SaveChangesAsync(CancellationToken.None);
                 //再根据经验和观看时长判断是否完成
                 if (IsCompleted(target))
                 {
@@ -653,7 +658,7 @@ public class TargetService : ITargetService
                         target.WatchedSeconds,
                         target.Exp);
                     target.Completed = true;
-                    await _db.SaveChangesAsync(CancellationToken.None);
+                    await db.SaveChangesAsync(CancellationToken.None);
                     return;
                 }
             }

@@ -3,17 +3,16 @@ using System.Text.Json.Nodes;
 using little_heart_bot_3.Data;
 using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
+using Microsoft.Extensions.DependencyInjection;
 using Polly;
 using Polly.Retry;
 using Serilog;
-using Serilog.Core;
 
 namespace little_heart_bot_3.Services.Implements;
 
 public class MessageService : IMessageService
 {
     private readonly ILogger _logger;
-    private readonly LittleHeartDbContext _db;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
 
@@ -21,12 +20,10 @@ public class MessageService : IMessageService
     private readonly ResiliencePipeline _sendPipeline;
 
     public MessageService(ILogger logger,
-        LittleHeartDbContext db,
         JsonSerializerOptions options,
         HttpClient httpClient)
     {
         _logger = logger;
-        _db = db;
         _options = options;
         _httpClient = httpClient;
 
@@ -248,11 +245,12 @@ public class MessageService : IMessageService
     private async Task HandleSendResponseAsync(MessageModel message, JsonNode response)
     {
         //不管结果，一条弹幕只发一次
+        var db = new LittleHeartDbContext();
         message.Completed = true;
         message.Code = (int)response["code"]!;
         message.Response = response.ToString();
-        _db.Messages.Update(message);
-        await _db.SaveChangesAsync(CancellationToken.None);
+        db.Messages.Update(message);
+        await db.SaveChangesAsync(CancellationToken.None);
 
         if (message.Code == 0)
         {
