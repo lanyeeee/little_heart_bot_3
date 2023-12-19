@@ -1,19 +1,16 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Nodes;
-using little_heart_bot_3.Data;
 using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
 using Polly;
 using Polly.Retry;
 using Serilog;
-using Serilog.Core;
 
 namespace little_heart_bot_3.Services.Implements;
 
 public class BotService : IBotService
 {
     private readonly ILogger _logger;
-    private readonly LittleHeartDbContext _db;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
 
@@ -26,12 +23,10 @@ public class BotService : IBotService
     #region Public
 
     public BotService(ILogger logger,
-        LittleHeartDbContext db,
         JsonSerializerOptions options,
         HttpClient httpClient)
     {
         _logger = logger;
-        _db = db;
 
         _options = options;
         _httpClient = httpClient;

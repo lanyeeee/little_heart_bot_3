@@ -14,7 +14,7 @@ public class Bot
     private readonly ILogger _logger;
     private readonly IBotService _botService;
     private readonly IUserService _userService;
-    private readonly LittleHeartDbContext _db;
+    private LittleHeartDbContext _db = null!;
 
     private bool _talking = true;
     private int _talkNum;
@@ -23,19 +23,17 @@ public class Bot
 
     public Bot([FromKeyedServices("bot:Logger")] ILogger logger,
         [FromKeyedServices("bot:BotService")] IBotService botService,
-        [FromKeyedServices("bot:UserService")] IUserService userService,
-        [FromKeyedServices("bot:LittleHeartDbContext")]
-        LittleHeartDbContext db)
+        [FromKeyedServices("bot:UserService")] IUserService userService)
     {
         _logger = logger;
         _botService = botService;
         _userService = userService;
-        _db = db;
 
         DateTimeOffset today = DateTime.Today;
         _yesterdayMidnightTimestamp = today.ToUnixTimeSeconds();
 
-        BotModel? botModel = _db.Bots.SingleOrDefault();
+        var db = new LittleHeartDbContext();
+        BotModel? botModel = db.Bots.SingleOrDefault();
         if (botModel == null)
         {
             _logger.Error("数据库bot_table表中没有数据");
@@ -54,6 +52,7 @@ public class Bot
         while (true)
         {
             using var cancellationTokenSource = new CancellationTokenSource();
+            _db = new();
             try
             {
                 Task updateSignTask = UpdateSignMain(cancellationTokenSource.Token);
@@ -115,29 +114,36 @@ public class Bot
         _talkNum = 0;
         //记录下今天零点的时间戳
         DateTimeOffset today = DateTime.Today;
+        long timestamp = _yesterdayMidnightTimestamp;
         _yesterdayMidnightTimestamp = today.ToUnixTimeSeconds();
 
-        await foreach (var message in _db.Messages)
+        _logger.Information("新的一天开始了，昨日零点的时间戳为{timestamp}，今日零点时间戳为 {yesterdayMidnightTimestamp}",
+            timestamp,
+            _yesterdayMidnightTimestamp);
+
+        var db = new LittleHeartDbContext();
+
+        await foreach (var message in db.Messages)
         {
             message.Code = 0;
             message.Response = null;
             message.Completed = false;
         }
 
-        await foreach (var target in _db.Targets)
+        await foreach (var target in db.Targets)
         {
             target.Exp = 0;
             target.WatchedSeconds = 0;
             target.Completed = false;
         }
 
-        await foreach (var user in _db.Users)
+        await foreach (var user in db.Users)
         {
             user.Completed = false;
             user.ConfigNum = 0;
         }
 
-        await _db.SaveChangesAsync(CancellationToken.None);
+        await db.SaveChangesAsync(CancellationToken.None);
     }
 
     private bool IsNewDay()
