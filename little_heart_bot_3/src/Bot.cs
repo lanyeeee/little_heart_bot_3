@@ -579,25 +579,32 @@ public class Bot
 
                 user.ReadTimestamp = timestamp.Value;
                 string? content = (string?)JsonNode.Parse(contentJson)!["content"];
-                content = content?.Trim();
+                if (content is null)
+                {
+                    continue;
+                }
+
+                content = content.Trim();
+                if (!content.StartsWith("/"))
+                {
+                    continue;
+                }
+
                 _logger.Information("{Uid}：{Content}", user.Uid, content);
 #if DEBUG
                 Console.WriteLine($"{user.Uid}：{content}");
 #endif
-                if (content?.StartsWith("/") ?? false)
+                string[] pair = content.Split(" ", 2);
+                if (pair.Length == 2)
                 {
-                    string[] pair = content.Split(" ", 2);
-                    if (pair.Length == 2)
-                    {
-                        string command = pair[0].Trim();
-                        string parameter = pair[1].Trim();
-                        await HandleCommandAsync(user, command, parameter, cancellationToken);
-                    }
-                    else
-                    {
-                        string command = pair[0].Trim();
-                        await HandleCommandAsync(user, command, null, cancellationToken);
-                    }
+                    string command = pair[0].Trim();
+                    string parameter = pair[1].Trim();
+                    await HandleCommandAsync(user, command, parameter, cancellationToken);
+                }
+                else
+                {
+                    string command = pair[0].Trim();
+                    await HandleCommandAsync(user, command, null, cancellationToken);
                 }
             }
             catch (Exception ex)

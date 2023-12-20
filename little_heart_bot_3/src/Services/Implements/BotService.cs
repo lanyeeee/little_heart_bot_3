@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
@@ -195,14 +196,11 @@ public class BotService : IBotService
                     Headers = { { "Cookie", bot.Cookie } },
                 }, ctx.CancellationToken);
                 await Task.Delay(1000, ctx.CancellationToken);
-                JsonNode? response =
-                    JsonNode.Parse(await responseMessage.Content.ReadAsStringAsync(ctx.CancellationToken));
-                if (response == null)
-                {
+                JsonNode response =
+                    await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, ctx.CancellationToken) ??
                     throw new LittleHeartException(Reason.NullResponse);
-                }
 
-                int? code = (int?)response["code"];
+                int code = (int)response["code"]!;
 
                 if (code != 0)
                 {
@@ -284,13 +282,10 @@ public class BotService : IBotService
                     Headers = { { "Cookie", bot.Cookie } },
                     Content = new FormUrlEncodedContent(payload)
                 }, token);
-                JsonNode? response = JsonNode.Parse(await responseMessage.Content.ReadAsStringAsync(token));
-                if (response == null)
-                {
-                    throw new LittleHeartException(Reason.NullResponse);
-                }
+                JsonNode response = await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, token) ??
+                                    throw new LittleHeartException(Reason.NullResponse);
 
-                int? code = (int?)response["code"];
+                int code = (int)response["code"]!;
                 if (code == 0)
                 {
                     _logger.Information("签名改为：{sign}", sign);
@@ -368,13 +363,11 @@ public class BotService : IBotService
 
                 await Task.Delay(1000, cancellationToken);
 
-                JsonNode? response = JsonNode.Parse(await responseMessage.Content.ReadAsStringAsync(cancellationToken));
-                if (response == null)
-                {
+                JsonNode response =
+                    await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken) ??
                     throw new LittleHeartException(Reason.NullResponse);
-                }
 
-                int? code = (int?)response["code"];
+                int code = (int)response["code"]!;
                 //TODO: 后续还要记录 1.私信到达上限 2.cookie过期 3.风控 的code
                 if (code != 0)
                 {
@@ -496,11 +489,8 @@ public class BotService : IBotService
             Headers = { { "Cookie", bot.Cookie } },
         }, cancellationToken);
         await Task.Delay(1000, cancellationToken);
-        JsonNode? response = JsonNode.Parse(await responseMessage.Content.ReadAsStringAsync(cancellationToken));
-        if (response == null)
-        {
-            throw new LittleHeartException(Reason.NullResponse);
-        }
+        JsonNode response = await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken) ??
+                            throw new LittleHeartException(Reason.NullResponse);
 
         int code = (int)response["code"]!;
         if (code != 0)
@@ -526,12 +516,8 @@ public class BotService : IBotService
                 new Uri("https://api.vc.bilibili.com/session_svr/v1/session_svr/get_sessions?session_type=5"),
             Headers = { { "Cookie", bot.Cookie } },
         }, cancellationToken);
-        JsonNode? response = JsonNode.Parse(await responseMessage.Content.ReadAsStringAsync(cancellationToken));
-
-        if (response == null)
-        {
-            throw new LittleHeartException(Reason.NullResponse);
-        }
+        JsonNode response = await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken) ??
+                            throw new LittleHeartException(Reason.NullResponse);
 
         int code = (int)response["code"]!;
         if (code != 0)

@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using little_heart_bot_3.Data;
 using little_heart_bot_3.Data.Models;
@@ -166,14 +167,11 @@ public class MessageService : IMessageService
                     Headers = { { "Cookie", user.Cookie } },
                     Content = new FormUrlEncodedContent(payload)
                 }, ctx.CancellationToken);
-                JsonNode? response =
-                    JsonNode.Parse(await responseMessage.Content.ReadAsStringAsync(ctx.CancellationToken));
-                if (response == null)
-                {
+                JsonNode response =
+                    await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, ctx.CancellationToken) ??
                     throw new LittleHeartException(Reason.NullResponse);
-                }
 
-                int? code = (int?)response["code"];
+                int code = (int)response["code"]!;
 
                 if (code == 0)
                 {
@@ -349,7 +347,7 @@ public class MessageService : IMessageService
             { "csrf_token", user.Csrf }
         };
 
-        HttpResponseMessage response = await _httpClient.SendAsync(new HttpRequestMessage
+        HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
         {
             Method = HttpMethod.Post,
             RequestUri = new Uri("https://api.live.bilibili.com/msg/send"),
@@ -357,6 +355,6 @@ public class MessageService : IMessageService
             Content = new FormUrlEncodedContent(payload)
         }, cancellationToken);
 
-        return JsonNode.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+        return await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken);
     }
 }

@@ -1,10 +1,10 @@
-﻿using System.Text;
+﻿using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using little_heart_bot_3.Data;
 using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
-using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 
 namespace little_heart_bot_3.Services.Implements;
@@ -162,11 +162,9 @@ public class UserService : IUserService
         }, cancellationToken);
         await Task.Delay(1000, cancellationToken);
 
-        JsonNode? response = JsonNode.Parse(await responseMessage.Content.ReadAsStringAsync(cancellationToken));
-        if (response == null)
-        {
+        JsonNode response =
+            await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken) ??
             throw new LittleHeartException(Reason.NullResponse);
-        }
 
         int code = (int)response["code"]!;
 
