@@ -11,6 +11,7 @@ namespace little_heart_bot_3;
 
 public class Bot
 {
+    private readonly IServiceProvider _provider;
     private readonly ILogger _logger;
     private readonly IBotService _botService;
     private readonly IUserService _userService;
@@ -21,10 +22,13 @@ public class Bot
     private long _yesterdayMidnightTimestamp; //今天0点的分钟时间戳
     private readonly BotModel _botModel;
 
-    public Bot([FromKeyedServices("bot:Logger")] ILogger logger,
+    public Bot(
+        IServiceProvider provider,
+        [FromKeyedServices("bot:Logger")] ILogger logger,
         [FromKeyedServices("bot:BotService")] IBotService botService,
         [FromKeyedServices("bot:UserService")] IUserService userService)
     {
+        _provider = provider;
         _logger = logger;
         _botService = botService;
         _userService = userService;

@@ -14,21 +14,25 @@ public class UserService : IUserService
     private readonly IServiceProvider _provider;
     private readonly ILogger _logger;
     private readonly IMessageService _messageService;
+    private readonly ITargetService _targetService;
     private readonly HttpClient _httpClient;
     private readonly JsonSerializerOptions _options;
 
 
-    public UserService(ILogger logger,
+    public UserService(
+        IServiceProvider provider,
+        ILogger logger,
         IMessageService messageService,
+        ITargetService targetService,
         JsonSerializerOptions options,
-        HttpClient httpClient,
-        IServiceProvider provider)
+        HttpClient httpClient)
     {
+        _provider = provider;
         _logger = logger;
         _messageService = messageService;
+        _targetService = targetService;
         _options = options;
         _httpClient = httpClient;
-        _provider = provider;
     }
 
     public async Task SendMessageAsync(UserModel user, CancellationToken cancellationToken = default)
@@ -83,14 +87,7 @@ public class UserService : IUserService
                 continue; //已完成的任务就跳过
             }
 
-            var task = Task.Run(async () =>
-            {
-                await using var scope = _provider.CreateAsyncScope();
-                var targetService = scope.ServiceProvider.GetRequiredKeyedService<ITargetService>("app:TargetService");
-
-                await targetService.StartAsync(target, cancellationToken);
-            }, cancellationToken);
-
+            var task = _targetService.StartAsync(target, cancellationToken);
             tasks.Add(task);
             _logger.Verbose("uid {Uid} 开始观看 {TargetName} 的直播",
                 user.Uid, target.TargetName);

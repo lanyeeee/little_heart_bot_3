@@ -6,10 +6,12 @@ namespace little_heart_bot_3.Services.Implements.Bot;
 
 public class TargetService : Implements.TargetService
 {
-    public TargetService([FromKeyedServices("bot:Logger")] ILogger logger,
+    public TargetService(
+        IServiceProvider provider,
+        [FromKeyedServices("bot:Logger")] ILogger logger,
         JsonSerializerOptions options,
         HttpClient httpClient)
-        : base(logger, options, httpClient)
+        : base(provider, logger, options, httpClient)
     {
     }
 }
