@@ -128,12 +128,12 @@ public class BotService : IBotService
                 var normalSessionList = await GetNormalSessionListAsync(bot, token);
                 var blockedSessionList = await GetBlockedSessionListAsync(bot, token);
 
-                if (normalSessionList == null)
+                if (normalSessionList is null)
                 {
                     return blockedSessionList;
                 }
 
-                if (blockedSessionList == null)
+                if (blockedSessionList is null)
                 {
                     return normalSessionList;
                 }

@@ -94,7 +94,7 @@ public class MessageService : IMessageService
             await _sendPipeline.ExecuteAsync(async ctx =>
             {
                 JsonNode? response = await PostMessageAsync(message, ctx.CancellationToken);
-                if (response == null)
+                if (response is null)
                 {
                     throw new LittleHeartException(Reason.NullResponse);
                 }

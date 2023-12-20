@@ -246,7 +246,7 @@ public class UserService : IUserService
         {
             stringBuilder.Append($"{message.TargetName}：{message.Content}\n");
             string statusMsg;
-            if (message.Response == null)
+            if (message.Response is null)
             {
                 statusMsg = "未发送\n";
             }
@@ -275,7 +275,7 @@ public class UserService : IUserService
         StringBuilder stringBuilder = new();
         stringBuilder.Append($"{message.TargetName}：{message.Content}\n");
         string statusMsg;
-        if (message.Response == null)
+        if (message.Response is null)
         {
             statusMsg = "未发送\n";
         }
@@ -293,7 +293,7 @@ public class UserService : IUserService
     {
         string? content = GetAllMessageConfigString(user);
 
-        if (content == null)
+        if (content is null)
         {
             return null;
         }
@@ -340,7 +340,7 @@ public class UserService : IUserService
     {
         string? content = GetAllTargetConfigString(user);
 
-        if (content == null)
+        if (content is null)
         {
             return null;
         }
