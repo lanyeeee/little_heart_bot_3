@@ -16,22 +16,25 @@ public class App
 {
     private readonly IServiceProvider _provider;
     private readonly ILogger _logger;
-    private LittleHeartDbContext _db = null!;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
+    private readonly IUserService _userService;
 
     private readonly ResiliencePipeline _verifyCookiesPipeline;
 
-    public App([FromKeyedServices("app:Logger")] ILogger logger,
+    public App(
+        IServiceProvider provider,
+        [FromKeyedServices("app:Logger")] ILogger logger,
+        [FromKeyedServices("app:UserService")] IUserService userService,
         JsonSerializerOptions options,
-        HttpClient httpClient,
-        IServiceProvider provider)
+        HttpClient httpClient
+    )
     {
+        _provider = provider;
         _logger = logger;
-
+        _userService = userService;
         _options = options;
         _httpClient = httpClient;
-        _provider = provider;
 
         _verifyCookiesPipeline = new ResiliencePipelineBuilder()
             .AddRetry(new RetryStrategyOptions
@@ -61,12 +64,12 @@ public class App
         while (true)
         {
             using var cancellationTokenSource = new CancellationTokenSource();
-            _db = new();
+            var db = _provider.GetRequiredService<LittleHeartDbContext>();
             try
             {
                 await VerifyCookiesAsync(cancellationTokenSource.Token);
                 //TODO: 后续需要改用Semaphore
-                List<UserModel> users = await _db.Users.AsNoTracking()
+                List<UserModel> users = await db.Users.AsNoTracking()
                     .Include(u => u.Messages)
                     .Include(u => u.Targets)
                     .AsSplitQuery()
@@ -113,7 +116,8 @@ public class App
 
     private async Task VerifyCookiesAsync(CancellationToken cancellationToken)
     {
-        List<UserModel> users = await _db.Users
+        var db = _provider.GetRequiredService<LittleHeartDbContext>();
+        List<UserModel> users = await db.Users
             .Include(u => u.Messages)
             .Include(u => u.Targets)
             .AsSplitQuery()
@@ -147,7 +151,7 @@ public class App
                     if (code == 0)
                     {
                         user.CookieStatus = CookieStatus.Normal;
-                        await _db.SaveChangesAsync(CancellationToken.None);
+                        await db.SaveChangesAsync(CancellationToken.None);
                     }
                     else if (code == -412)
                     {
@@ -166,7 +170,7 @@ public class App
                         _logger.ForContext("Response", response.ToJsonString(_options))
                             .Error("uid {uid} 验证cookie时出现预料之外的错误", user.Uid);
                         user.CookieStatus = CookieStatus.Error;
-                        await _db.SaveChangesAsync(CancellationToken.None);
+                        await db.SaveChangesAsync(CancellationToken.None);
                     }
                 }, context);
             }
@@ -178,14 +182,14 @@ public class App
                         throw;
                     case Reason.CookieExpired:
                         user.CookieStatus = CookieStatus.Error;
-                        await _db.SaveChangesAsync(CancellationToken.None);
+                        await db.SaveChangesAsync(CancellationToken.None);
                         break;
                     case Reason.NullResponse:
                         _logger.Error(ex,
                             "uid {Uid} 验证cookie时出现 NullResponse 异常，polly尝试多次后依旧发生异常",
                             user.Uid);
                         user.CookieStatus = CookieStatus.Error;
-                        await _db.SaveChangesAsync(CancellationToken.None);
+                        await db.SaveChangesAsync(CancellationToken.None);
                         break;
                 }
             }
@@ -195,7 +199,7 @@ public class App
                     "uid {Uid} 验证cookie时出现 HttpRequestException 异常，polly尝试多次后依旧发生异常",
                     user.Uid);
                 user.CookieStatus = CookieStatus.Error;
-                await _db.SaveChangesAsync(CancellationToken.None);
+                await db.SaveChangesAsync(CancellationToken.None);
                 throw new LittleHeartException(Reason.Ban);
             }
             finally
@@ -211,13 +215,7 @@ public class App
 
         foreach (var user in users)
         {
-            var task = Task.Run(async () =>
-            {
-                await using var scope = _provider.CreateAsyncScope();
-                var userService = scope.ServiceProvider.GetRequiredKeyedService<IUserService>("app:UserService");
-
-                await userService.SendMessageAsync(user, cancellationToken);
-            }, cancellationToken);
+            var task = _userService.SendMessageAsync(user, cancellationToken);
 
             tasks.Add(task);
             await Task.Delay(100, cancellationToken);
@@ -237,13 +235,7 @@ public class App
         var tasks = new List<Task>();
         foreach (var user in users)
         {
-            var task = Task.Run(async () =>
-            {
-                await using var scope = _provider.CreateAsyncScope();
-                var userService = scope.ServiceProvider.GetRequiredKeyedService<IUserService>("app:UserService");
-
-                await userService.WatchLiveAsync(user, cancellationToken);
-            }, cancellationToken);
+            var task = _userService.WatchLiveAsync(user, cancellationToken);
 
             tasks.Add(task);
             await Task.Delay(2000, cancellationToken);

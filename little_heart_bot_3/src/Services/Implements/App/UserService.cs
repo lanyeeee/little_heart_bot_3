@@ -6,13 +6,16 @@ namespace little_heart_bot_3.Services.Implements.App;
 
 public class UserService : Implements.UserService
 {
-    public UserService([FromKeyedServices("app:Logger")] ILogger logger,
+    public UserService(
+        IServiceProvider provider,
+        [FromKeyedServices("app:Logger")] ILogger logger,
         [FromKeyedServices("app:MessageService")]
         IMessageService messageService,
+        [FromKeyedServices("app:TargetService")]
+        ITargetService targetService,
         JsonSerializerOptions options,
-        HttpClient httpClient,
-        IServiceProvider provider)
-        : base(logger, messageService, options, httpClient, provider)
+        HttpClient httpClient)
+        : base(provider, logger, messageService, targetService, options, httpClient)
     {
     }
 }

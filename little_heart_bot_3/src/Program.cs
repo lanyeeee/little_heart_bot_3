@@ -1,5 +1,6 @@
 ﻿using System.Text.Encodings.Web;
 using System.Text.Json;
+using little_heart_bot_3.Data;
 using little_heart_bot_3.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
@@ -65,6 +66,7 @@ public static class Program
             .Enrich.WithCaller(true)
             .CreateLogger());
 
+        services.AddTransient<LittleHeartDbContext>();
         //BotService
         services.AddKeyedScoped<IBotService, Services.Implements.Bot.BotService>("bot:BotService");
         services.AddKeyedScoped<IBotService, Services.Implements.App.BotService>("app:BotService");
