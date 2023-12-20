@@ -111,7 +111,7 @@ public class TargetService : ITargetService
         db.Targets.Attach(target);
 
         int? exp = await GetExpAsync(target, cancellationToken);
-        if (exp == null)
+        if (exp is null)
         {
             //没有粉丝牌或出现了意料之外的错误，直接标记为已完成
             target.Completed = true;
@@ -146,7 +146,7 @@ public class TargetService : ITargetService
 
         //否则开始观看直播
         Dictionary<string, string?>? payload = await PostEAsync(target, cancellationToken);
-        if (payload == null)
+        if (payload is null)
         {
             return;
         }
@@ -231,7 +231,7 @@ public class TargetService : ITargetService
         CancellationToken cancellationToken = default)
     {
         Dictionary<string, string?>? payload = await GetPayloadAsync(target, cancellationToken);
-        if (payload == null)
+        if (payload is null)
         {
             return null;
         }
@@ -630,7 +630,7 @@ public class TargetService : ITargetService
             {
                 //先获取经验
                 int? exp = await GetExpAsync(target, cancellationToken);
-                if (exp == null)
+                if (exp is null)
                 {
                     //出现了意料之外的错误，直接标记为已完成
                     target.Completed = true;

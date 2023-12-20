@@ -38,7 +38,7 @@ public class Bot
 
         var db = new LittleHeartDbContext();
         BotModel? botModel = db.Bots.SingleOrDefault();
-        if (botModel == null)
+        if (botModel is null)
         {
             _logger.Error("数据库bot_table表中没有数据");
             throw new Exception("数据库bot_table表中没有数据，请自行添加");
@@ -178,7 +178,7 @@ public class Bot
     {
         switch (command)
         {
-            case "/target_set" when parameter == null:
+            case "/target_set" when parameter is null:
                 return;
             case "/target_set":
             {
@@ -189,7 +189,7 @@ public class Bot
                 }
 
                 JsonNode? data = await _userService.GetOtherUserInfoAsync(user, targetUid, cancellationToken);
-                if (data == null)
+                if (data is null)
                 {
                     return;
                 }
@@ -198,7 +198,7 @@ public class Bot
                 long roomId = (long)data["live_room"]!["roomid"]!;
                 TargetModel? target = user.Targets.FirstOrDefault(t => t.TargetUid == targetUid);
 
-                if (target != null)
+                if (target is not null)
                 {
                     target.TargetName = targetName;
                     target.RoomId = roomId;
@@ -222,7 +222,7 @@ public class Bot
 
                     var message = user.Messages.FirstOrDefault(m => m.TargetUid == targetUid);
 
-                    if (message != null)
+                    if (message is not null)
                     {
                         message.Completed = false;
                         await _db.SaveChangesAsync(CancellationToken.None);
@@ -248,7 +248,7 @@ public class Bot
                 await _db.SaveChangesAsync(CancellationToken.None);
                 break;
             }
-            case "/target_delete" when parameter == null:
+            case "/target_delete" when parameter is null:
                 return;
             case "/target_delete" when parameter == "all":
             {
@@ -265,7 +265,7 @@ public class Bot
                 }
 
                 TargetModel? target = user.Targets.FirstOrDefault(t => t.TargetUid == targetUid);
-                if (target != null)
+                if (target is not null)
                 {
                     user.Targets.Remove(target);
                     await _db.SaveChangesAsync(CancellationToken.None);
@@ -273,7 +273,7 @@ public class Bot
 
                 break;
             }
-            case "/message_set" when parameter == null:
+            case "/message_set" when parameter is null:
                 return;
             case "/message_set":
             {
@@ -293,7 +293,7 @@ public class Bot
                 }
 
                 MessageModel? message = user.Messages.FirstOrDefault(m => m.TargetUid == targetUid);
-                if (message != null)
+                if (message is not null)
                 {
                     message.Content = content;
                     message.Completed = false;
@@ -304,7 +304,7 @@ public class Bot
                 else
                 {
                     JsonNode? data = await _userService.GetOtherUserInfoAsync(user, targetUid, cancellationToken);
-                    if (data == null)
+                    if (data is null)
                     {
                         return;
                     }
@@ -327,7 +327,7 @@ public class Bot
 
                 break;
             }
-            case "/message_delete" when parameter == null:
+            case "/message_delete" when parameter is null:
                 return;
             case "/message_delete" when parameter == "all":
             {
@@ -366,7 +366,7 @@ public class Bot
 
                 TargetModel? target = user.Targets.FirstOrDefault(t => t.TargetUid == targetUid);
 
-                if (target != null)
+                if (target is not null)
                 {
                     message.Content = Globals.DefaultMessageContent;
                     message.Code = 0;
@@ -405,7 +405,7 @@ public class Bot
             case "/config_all":
             {
                 string? content = _userService.GetConfigAllString(user);
-                if (content == null)
+                if (content is null)
                 {
                     return;
                 }
@@ -416,7 +416,7 @@ public class Bot
             case "/message_config" when parameter == "all":
             {
                 List<string>? contents = _userService.GetAllMessageConfigStringSplit(user);
-                if (contents == null)
+                if (contents is null)
                 {
                     return;
                 }
@@ -436,13 +436,13 @@ public class Bot
                 if (parameterIsUid)
                 {
                     MessageModel? message = user.Messages.FirstOrDefault(m => m.TargetUid == targetUid);
-                    if (message == null)
+                    if (message is null)
                     {
                         return;
                     }
 
                     string? content = _userService.GetSpecifyMessageConfigString(message);
-                    if (content == null)
+                    if (content is null)
                     {
                         return;
                     }
@@ -453,7 +453,7 @@ public class Bot
                 else
                 {
                     string? content = _userService.GetAllMessageConfigString(user);
-                    if (content == null)
+                    if (content is null)
                     {
                         return;
                     }
@@ -473,7 +473,7 @@ public class Bot
             case "/target_config" when parameter == "all":
             {
                 List<string>? contents = _userService.GetAllTargetConfigStringSplit(user);
-                if (contents == null)
+                if (contents is null)
                 {
                     return;
                 }
@@ -493,13 +493,13 @@ public class Bot
                 if (parameterIsUid)
                 {
                     TargetModel? target = user.Targets.FirstOrDefault(t => t.TargetUid == targetUid);
-                    if (target == null)
+                    if (target is null)
                     {
                         return;
                     }
 
                     string? content = _userService.GetSpecifyTargetConfigString(target);
-                    if (content == null)
+                    if (content is null)
                     {
                         return;
                     }
@@ -510,7 +510,7 @@ public class Bot
                 else
                 {
                     string? content = _userService.GetAllTargetConfigString(user);
-                    if (content == null)
+                    if (content is null)
                     {
                         return;
                     }
@@ -555,7 +555,7 @@ public class Bot
     {
         foreach (var msg in messages)
         {
-            if (msg == null)
+            if (msg is null)
             {
                 continue;
             }
@@ -572,7 +572,7 @@ public class Bot
             {
                 long? timestamp = (long?)msg["timestamp"];
                 string? contentJson = (string?)msg["content"];
-                if (timestamp == null || contentJson == null)
+                if (timestamp is null || contentJson is null)
                 {
                     return;
                 }
@@ -617,20 +617,20 @@ public class Bot
     private async Task HandleIncomingMessageAsync(CancellationToken cancellationToken = default)
     {
         IEnumerable<JsonNode?>? sessionList = await _botService.GetSessionListAsync(_botModel, cancellationToken);
-        if (sessionList == null)
+        if (sessionList is null)
         {
             return;
         }
 
         foreach (var session in sessionList)
         {
-            if (session == null)
+            if (session is null)
             {
                 continue;
             }
 
             long? nullableUid = (long?)session["talker_id"];
-            if (nullableUid == null)
+            if (nullableUid is null)
             {
                 continue;
             }
@@ -638,13 +638,13 @@ public class Bot
             long uid = nullableUid.Value;
 
             JsonObject? lastMsg = session["last_msg"]?.AsObject();
-            if (lastMsg == null)
+            if (lastMsg is null)
             {
                 continue;
             }
 
             long? timestamp = lastMsg.Count != 0 ? (long?)lastMsg["timestamp"] : 0;
-            if (timestamp == null)
+            if (timestamp is null)
             {
                 continue;
             }
@@ -654,7 +654,7 @@ public class Bot
                 .Include(u => u.Targets)
                 .FirstOrDefaultAsync(u => u.Uid == uid, cancellationToken);
 
-            if (user == null) //新用户
+            if (user is null) //新用户
             {
                 user = new UserModel
                 {
@@ -671,7 +671,7 @@ public class Bot
                 await _db.Users.AddAsync(user, CancellationToken.None);
                 await _db.SaveChangesAsync(CancellationToken.None);
 
-                if (messages != null)
+                if (messages is not null)
                 {
                     await HandleMessagesAsync(user, 0, messages, cancellationToken);
                 }
@@ -686,7 +686,7 @@ public class Bot
                 user.ReadTimestamp = timestamp.Value;
                 await _db.SaveChangesAsync(CancellationToken.None);
 
-                if (messages != null)
+                if (messages is not null)
                 {
                     await HandleMessagesAsync(user, readTimestamp, messages, cancellationToken);
                 }
