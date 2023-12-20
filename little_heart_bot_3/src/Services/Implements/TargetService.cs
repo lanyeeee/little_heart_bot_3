@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using little_heart_bot_3.Data;
@@ -151,7 +152,7 @@ public class TargetService : ITargetService
         }
 
         JsonNode id = JsonNode.Parse(payload["id"]!)!;
-        if ((int?)id[0] == 0 || (int?)id[1] == 0)
+        if ((int)id[0]! == 0 || (int)id[1]! == 0)
         {
             _logger.Warning("uid {Uid} 在 {TargetName} 的任务完成，观看时长为0因为 {TargetName} 的直播间没有选择分区，无法观看",
                 target.Uid,
@@ -182,13 +183,10 @@ public class TargetService : ITargetService
             Method = HttpMethod.Get,
             RequestUri = uri
         }, cancellationToken);
-        JsonNode? response = JsonNode.Parse(await responseMessage.Content.ReadAsStringAsync(cancellationToken));
-        if (response == null)
-        {
-            throw new LittleHeartException(Reason.NullResponse);
-        }
+        JsonNode response = await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken) ??
+                            throw new LittleHeartException(Reason.NullResponse);
 
-        int? code = (int?)response["code"];
+        int code = (int)response["code"]!;
 
         if (code == 19002005) //房间已加密
         {
@@ -208,8 +206,8 @@ public class TargetService : ITargetService
             throw new LittleHeartException(Reason.Ban);
         }
 
-        int? parentAreaId = (int?)response["data"]!["room_info"]!["parent_area_id"];
-        int? areaId = (int?)response["data"]!["room_info"]!["area_id"];
+        int parentAreaId = (int)response["data"]!["room_info"]!["parent_area_id"]!;
+        int areaId = (int)response["data"]!["room_info"]!["area_id"]!;
         var id = new JsonArray { parentAreaId, areaId, 0, target.RoomId };
 
         return new Dictionary<string, string?>
@@ -253,14 +251,11 @@ public class TargetService : ITargetService
                     Content = new FormUrlEncodedContent(payload)
                 }, ctx.CancellationToken);
 
-                JsonNode? response =
-                    JsonNode.Parse(await responseMessage.Content.ReadAsStringAsync(ctx.CancellationToken));
-                if (response == null)
-                {
+                JsonNode response =
+                    await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, ctx.CancellationToken) ??
                     throw new LittleHeartException(Reason.NullResponse);
-                }
 
-                int? code = (int?)response["code"];
+                int code = (int)response["code"]!;
                 if (code != 0)
                 {
                     //TODO: 以后需要记录 风控 和 Cookie过期 的code，专门处理
@@ -343,11 +338,9 @@ public class TargetService : ITargetService
             Content = new StringContent(sPayload.ToJsonString(_options), Encoding.UTF8,
                 "application/json")
         }, cancellationToken);
-        JsonNode? response = JsonNode.Parse(await responseMessage.Content.ReadAsStringAsync(cancellationToken));
-        if (response == null)
-        {
+        JsonNode response =
+            await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken) ??
             throw new LittleHeartException(Reason.NullResponse);
-        }
 
         return (string?)response["s"];
     }
@@ -384,14 +377,11 @@ public class TargetService : ITargetService
                     Headers = { { "Cookie", target.UserModel.Cookie } },
                     Content = new FormUrlEncodedContent(xPayload)
                 }, ctx.CancellationToken);
-                JsonNode? response =
-                    JsonNode.Parse(await responseMessage.Content.ReadAsStringAsync(ctx.CancellationToken));
-                if (response == null)
-                {
+                JsonNode response =
+                    await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, ctx.CancellationToken) ??
                     throw new LittleHeartException(Reason.NullResponse);
-                }
 
-                int? code = (int?)response["code"];
+                int code = (int)response["code"]!;
                 if (code == -504)
                 {
                     _logger.ForContext("Response", response.ToJsonString(_options))
@@ -431,7 +421,7 @@ public class TargetService : ITargetService
                 payload["secret_key"] = (string?)response["data"]!["secret_key"];
                 payload["heartbeat_interval"] = response["data"]!["heartbeat_interval"]?.GetValue<long>().ToString();
                 JsonArray id = JsonNode.Parse(payload["id"]!)!.AsArray();
-                id[2] = (int?)id[2] + 1;
+                id[2] = (int)id[2]! + 1;
                 payload["id"] = id.ToJsonString(_options);
                 return true;
             }, context);
@@ -506,12 +496,9 @@ public class TargetService : ITargetService
                     Headers = { { "cookie", target.UserModel.Cookie } }
                 }, ctx.CancellationToken);
 
-                JsonNode? response =
-                    JsonNode.Parse(await responseMessage.Content.ReadAsStringAsync(ctx.CancellationToken));
-                if (response == null)
-                {
+                JsonNode response =
+                    await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, ctx.CancellationToken) ??
                     throw new LittleHeartException(Reason.NullResponse);
-                }
 
                 int code = (int)response["code"]!;
                 if (code == -101)

@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using little_heart_bot_3.Data;
@@ -140,12 +141,9 @@ public class App
                     }, ctx.CancellationToken);
                     await Task.Delay(1000, ctx.CancellationToken);
 
-                    JsonNode? response =
-                        JsonNode.Parse(await responseMessage.Content.ReadAsStringAsync(ctx.CancellationToken));
-                    if (response == null)
-                    {
+                    JsonNode response =
+                        await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, ctx.CancellationToken) ??
                         throw new LittleHeartException(Reason.NullResponse);
-                    }
 
                     int? code = (int?)response["code"];
                     if (code == 0)
