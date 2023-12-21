@@ -15,7 +15,6 @@ namespace little_heart_bot_3;
 
 public class App
 {
-    private readonly IServiceProvider _provider;
     private readonly ILogger _logger;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
@@ -24,14 +23,12 @@ public class App
     private readonly ResiliencePipeline _verifyCookiesPipeline;
 
     public App(
-        IServiceProvider provider,
         [FromKeyedServices("app:Logger")] ILogger logger,
         [FromKeyedServices("app:UserService")] IUserService userService,
         JsonSerializerOptions options,
         HttpClient httpClient
     )
     {
-        _provider = provider;
         _logger = logger;
         _userService = userService;
         _options = options;
@@ -65,7 +62,7 @@ public class App
         while (true)
         {
             using var cancellationTokenSource = new CancellationTokenSource();
-            var db = _provider.GetRequiredService<LittleHeartDbContext>();
+            await using var db = new LittleHeartDbContext();
             try
             {
                 await VerifyCookiesAsync(cancellationTokenSource.Token);
@@ -117,7 +114,7 @@ public class App
 
     private async Task VerifyCookiesAsync(CancellationToken cancellationToken)
     {
-        var db = _provider.GetRequiredService<LittleHeartDbContext>();
+        await using var db = new LittleHeartDbContext();
         List<UserModel> users = await db.Users
             .Include(u => u.Messages)
             .Include(u => u.Targets)

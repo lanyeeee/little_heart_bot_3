@@ -11,7 +11,6 @@ namespace little_heart_bot_3;
 
 public class Bot
 {
-    private readonly IServiceProvider _provider;
     private readonly ILogger _logger;
     private readonly IBotService _botService;
     private readonly IUserService _userService;
@@ -23,12 +22,10 @@ public class Bot
     private readonly BotModel _botModel;
 
     public Bot(
-        IServiceProvider provider,
         [FromKeyedServices("bot:Logger")] ILogger logger,
         [FromKeyedServices("bot:BotService")] IBotService botService,
         [FromKeyedServices("bot:UserService")] IUserService userService)
     {
-        _provider = provider;
         _logger = logger;
         _botService = botService;
         _userService = userService;
@@ -36,7 +33,7 @@ public class Bot
         DateTimeOffset today = DateTime.Today;
         _yesterdayMidnightTimestamp = today.ToUnixTimeSeconds();
 
-        var db = new LittleHeartDbContext();
+        using var db = new LittleHeartDbContext();
         BotModel? botModel = db.Bots.SingleOrDefault();
         if (botModel is null)
         {
@@ -125,7 +122,7 @@ public class Bot
             timestamp,
             _yesterdayMidnightTimestamp);
 
-        var db = new LittleHeartDbContext();
+        await using var db = new LittleHeartDbContext();
 
         await foreach (var message in db.Messages)
         {
