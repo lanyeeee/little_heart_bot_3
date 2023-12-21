@@ -11,7 +11,6 @@ namespace little_heart_bot_3.Services.Implements;
 
 public class BotService : IBotService
 {
-    private readonly IServiceProvider _provider;
     private readonly ILogger _logger;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
@@ -25,12 +24,10 @@ public class BotService : IBotService
     #region Public
 
     public BotService(
-        IServiceProvider provider,
         ILogger logger,
         JsonSerializerOptions options,
         HttpClient httpClient)
     {
-        _provider = provider;
         _logger = logger;
         _options = options;
         _httpClient = httpClient;

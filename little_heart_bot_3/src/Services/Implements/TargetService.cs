@@ -5,7 +5,6 @@ using System.Text.Json.Nodes;
 using little_heart_bot_3.Data;
 using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
-using Microsoft.Extensions.DependencyInjection;
 using Polly;
 using Polly.Retry;
 using Serilog;
@@ -14,7 +13,6 @@ namespace little_heart_bot_3.Services.Implements;
 
 public class TargetService : ITargetService
 {
-    private readonly IServiceProvider _provider;
     private readonly ILogger _logger;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
@@ -24,12 +22,10 @@ public class TargetService : ITargetService
     private readonly ResiliencePipeline _getExpPipeline;
 
     public TargetService(
-        IServiceProvider provider,
         ILogger logger,
         JsonSerializerOptions options,
         HttpClient httpClient)
     {
-        _provider = provider;
         _logger = logger;
         _options = options;
         _httpClient = httpClient;
@@ -107,7 +103,7 @@ public class TargetService : ITargetService
 
     public async Task StartAsync(TargetModel target, CancellationToken cancellationToken = default)
     {
-        var db = _provider.GetRequiredService<LittleHeartDbContext>();
+        await using var db = new LittleHeartDbContext();
         db.Targets.Attach(target);
 
         int? exp = await GetExpAsync(target, cancellationToken);
@@ -172,7 +168,7 @@ public class TargetService : ITargetService
     private async Task<Dictionary<string, string?>?> GetPayloadAsync(TargetModel target,
         CancellationToken cancellationToken = default)
     {
-        var db = _provider.GetRequiredService<LittleHeartDbContext>();
+        await using var db = new LittleHeartDbContext();
         db.Attach(target);
 
         var uri = new Uri(
@@ -555,10 +551,12 @@ public class TargetService : ITargetService
                     ex.Reason = Reason.Ban;
                     throw;
                 case Reason.WithoutMedal:
-                    var db = _provider.GetRequiredService<LittleHeartDbContext>();
+                {
+                    await using var db = new LittleHeartDbContext();
                     db.Remove(target);
                     await db.SaveChangesAsync(CancellationToken.None);
                     return null;
+                }
                 default:
                     return null;
             }
@@ -614,7 +612,7 @@ public class TargetService : ITargetService
             }
 
             interval = int.Parse(payload["heartbeat_interval"]!);
-            var db = _provider.GetRequiredService<LittleHeartDbContext>();
+            await using var db = new LittleHeartDbContext();
             db.Attach(target);
             target.WatchedSeconds += interval;
             await db.SaveChangesAsync(CancellationToken.None);

@@ -11,7 +11,6 @@ namespace little_heart_bot_3.Services.Implements;
 
 public class UserService : IUserService
 {
-    private readonly IServiceProvider _provider;
     private readonly ILogger _logger;
     private readonly IMessageService _messageService;
     private readonly ITargetService _targetService;
@@ -20,14 +19,12 @@ public class UserService : IUserService
 
 
     public UserService(
-        IServiceProvider provider,
         ILogger logger,
         IMessageService messageService,
         ITargetService targetService,
         JsonSerializerOptions options,
         HttpClient httpClient)
     {
-        _provider = provider;
         _logger = logger;
         _messageService = messageService;
         _targetService = targetService;
@@ -37,7 +34,7 @@ public class UserService : IUserService
 
     public async Task SendMessageAsync(UserModel user, CancellationToken cancellationToken = default)
     {
-        var db = new LittleHeartDbContext();
+        await using var db = new LittleHeartDbContext();
         db.Attach(user);
 
         foreach (var message in user.Messages)
@@ -72,7 +69,7 @@ public class UserService : IUserService
 
     public async Task WatchLiveAsync(UserModel user, CancellationToken cancellationToken = default)
     {
-        var db = new LittleHeartDbContext();
+        await using var db = new LittleHeartDbContext();
         db.Users.Attach(user);
 
         //TODO: 改用Semaphore限制
