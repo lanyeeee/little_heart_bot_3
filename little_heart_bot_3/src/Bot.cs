@@ -5,11 +5,12 @@ using little_heart_bot_3.Others;
 using little_heart_bot_3.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Serilog;
 
 namespace little_heart_bot_3;
 
-public class Bot
+public class Bot : BackgroundService
 {
     private readonly ILogger _logger;
     private readonly IBotService _botService;
@@ -48,9 +49,9 @@ public class Bot
         Globals.ReceiveStatus = _botModel.ReceiveStatus;
     }
 
-    public async Task Main()
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        while (true)
+        while (!stoppingToken.IsCancellationRequested)
         {
             using var cancellationTokenSource = new CancellationTokenSource();
             _db = new();
