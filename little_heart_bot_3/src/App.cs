@@ -7,13 +7,14 @@ using little_heart_bot_3.Others;
 using little_heart_bot_3.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Polly;
 using Polly.Retry;
 using Serilog;
 
 namespace little_heart_bot_3;
 
-public class App
+public class App : BackgroundService
 {
     private readonly ILogger _logger;
     private readonly JsonSerializerOptions _options;
@@ -57,9 +58,9 @@ public class App
             .Build();
     }
 
-    public async Task Main()
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        while (true)
+        while (!stoppingToken.IsCancellationRequested)
         {
             using var cancellationTokenSource = new CancellationTokenSource();
             await using var db = new LittleHeartDbContext();
