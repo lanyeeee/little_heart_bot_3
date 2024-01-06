@@ -4,7 +4,7 @@ namespace little_heart_bot_3.Services;
 
 public interface IAppService
 {
-    Task VerifyCookiesAsync(CancellationToken cancellationToken);
-    Task SendMessageAsync(List<UserModel> users, CancellationToken cancellationToken);
-    Task WatchLiveAsync(List<UserModel> users, CancellationToken cancellationToken);
+    Task VerifyCookiesAsync(CancellationToken cancellationToken = default);
+    Task SendMessageAsync(List<UserModel> users, CancellationToken cancellationToken = default);
+    Task WatchLiveAsync(List<UserModel> users, CancellationToken cancellationToken = default);
 }

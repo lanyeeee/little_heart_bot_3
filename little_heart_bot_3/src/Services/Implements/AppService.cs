@@ -17,17 +17,20 @@ public class AppService : IAppService
     private readonly ILogger _logger;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
+    private readonly IUserService _userService;
 
     private readonly ResiliencePipeline _verifyCookiesPipeline;
 
     public AppService(
         [FromKeyedServices("app:Logger")] ILogger logger,
         JsonSerializerOptions options,
-        HttpClient httpClient)
+        HttpClient httpClient,
+        [FromKeyedServices("app:UserService")] IUserService userService)
     {
         _logger = logger;
         _options = options;
         _httpClient = httpClient;
+        _userService = userService;
 
         _verifyCookiesPipeline = new ResiliencePipelineBuilder()
             .AddRetry(new RetryStrategyOptions
@@ -52,7 +55,7 @@ public class AppService : IAppService
             .Build();
     }
 
-    public async Task VerifyCookiesAsync(CancellationToken cancellationToken)
+    public async Task VerifyCookiesAsync(CancellationToken cancellationToken = default)
     {
         await using var db = new LittleHeartDbContext();
         List<UserModel> users = await db.Users
@@ -145,15 +148,40 @@ public class AppService : IAppService
         }
     }
 
-    public async Task SendMessageAsync(List<UserModel> users, CancellationToken cancellationToken)
+    public async Task SendMessageAsync(List<UserModel> users, CancellationToken cancellationToken = default)
     {
-        //TODO 2:
-        throw new NotImplementedException();
+        var tasks = new List<Task>();
+
+        foreach (var user in users)
+        {
+            tasks.Add(_userService.SendMessageAsync(user, cancellationToken));
+            await Task.Delay(100, cancellationToken);
+        }
+
+        while (tasks.Count != 0)
+        {
+            Task completedTask = await Task.WhenAny(tasks);
+            tasks.Remove(completedTask);
+
+            await completedTask;
+        }
     }
 
-    public async Task WatchLiveAsync(List<UserModel> users, CancellationToken cancellationToken)
+    public async Task WatchLiveAsync(List<UserModel> users, CancellationToken cancellationToken = default)
     {
-        //TODO 2:
-        throw new NotImplementedException();
+        var tasks = new List<Task>();
+        foreach (var user in users)
+        {
+            tasks.Add(_userService.WatchLiveAsync(user, cancellationToken));
+            await Task.Delay(2000, cancellationToken);
+        }
+
+        while (tasks.Count != 0)
+        {
+            Task completedTask = await Task.WhenAny(tasks);
+            tasks.Remove(completedTask);
+
+            await completedTask;
+        }
     }
 }
