@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
+using Microsoft.Extensions.DependencyInjection;
 using Polly;
 using Polly.Retry;
 using Serilog;
@@ -24,7 +25,7 @@ public class BotService : IBotService
     #region Public
 
     public BotService(
-        ILogger logger,
+        [FromKeyedServices("bot:Logger")] ILogger logger,
         JsonSerializerOptions options,
         HttpClient httpClient)
     {
