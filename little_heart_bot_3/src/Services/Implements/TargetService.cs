@@ -1,5 +1,4 @@
 ﻿using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using little_heart_bot_3.Data;
@@ -141,13 +140,19 @@ public class TargetService : ITargetService
         }
 
         //否则开始观看直播
-        Dictionary<string, string?>? payload = await PostEAsync(target, cancellationToken);
-        if (payload is null)
+        Dictionary<string, string>? ePayload = await GetEPayloadAsync(target, cancellationToken);
+        if (ePayload is null)
         {
             return;
         }
 
-        JsonNode id = JsonNode.Parse(payload["id"]!)!;
+        JsonNode? heartbeatData = await PostEAsync(target, ePayload, cancellationToken);
+        if (heartbeatData is null)
+        {
+            return;
+        }
+
+        JsonNode id = JsonNode.Parse(ePayload["id"])!;
         if ((int)id[0]! == 0 || (int)id[1]! == 0)
         {
             _logger.Warning("uid {Uid} 在 {TargetName} 的任务完成，观看时长为0因为 {TargetName} 的直播间没有选择分区，无法观看",
@@ -160,10 +165,10 @@ public class TargetService : ITargetService
             return;
         }
 
-        await HeartBeatAsync(target, payload, cancellationToken);
+        await HeartBeatAsync(target, ePayload, heartbeatData, cancellationToken);
     }
 
-    private async Task<Dictionary<string, string?>?> GetPayloadAsync(TargetModel target,
+    private async Task<Dictionary<string, string>?> GetEPayloadAsync(TargetModel target,
         CancellationToken cancellationToken = default)
     {
         await using var db = new LittleHeartDbContext();
@@ -204,7 +209,7 @@ public class TargetService : ITargetService
         int areaId = (int)response["data"]!["room_info"]!["area_id"]!;
         var id = new JsonArray { parentAreaId, areaId, 0, target.RoomId };
 
-        return new Dictionary<string, string?>
+        return new Dictionary<string, string>
         {
             { "id", id.ToJsonString(_options) },
             { "device", "[\"AUTO8716422349901853\",\"3E739D10D-174A-10DD5-61028-A5E3625BE56450692infoc\"]" },
@@ -221,28 +226,24 @@ public class TargetService : ITargetService
         };
     }
 
-    private async Task<Dictionary<string, string?>?> PostEAsync(TargetModel target,
+    private async Task<JsonNode?> PostEAsync(
+        TargetModel target,
+        Dictionary<string, string> ePayload,
         CancellationToken cancellationToken = default)
     {
-        Dictionary<string, string?>? payload = await GetPayloadAsync(target, cancellationToken);
-        if (payload is null)
-        {
-            return null;
-        }
-
         ResilienceContext context = ResilienceContextPool.Shared.Get(cancellationToken);
         context.Properties.Set(LittleHeartResilienceKeys.Target, target);
 
         try
         {
-            await _postEPipeline.ExecuteAsync(async ctx =>
+            return await _postEPipeline.ExecuteAsync(async ctx =>
             {
                 HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
                 {
                     Method = HttpMethod.Post,
                     RequestUri = new Uri("https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/E"),
                     Headers = { { "Cookie", target.UserModel.Cookie } },
-                    Content = new FormUrlEncodedContent(payload)
+                    Content = new FormUrlEncodedContent(ePayload)
                 }, ctx.CancellationToken);
 
                 JsonNode response =
@@ -259,10 +260,7 @@ public class TargetService : ITargetService
                     throw new LittleHeartException(Reason.Ban);
                 }
 
-                payload["ets"] = response["data"]!["timestamp"]?.GetValue<long>().ToString();
-                payload["secret_key"] = (string?)response["data"]!["secret_key"];
-                payload["heartbeat_interval"] = response["data"]!["heartbeat_interval"]?.GetValue<long>().ToString();
-                payload["secret_rule"] = response["data"]!["secret_rule"]!.ToJsonString(_options);
+                return response["data"]!;
             }, context);
         }
         catch (LittleHeartException ex)
@@ -296,50 +294,17 @@ public class TargetService : ITargetService
             _logger.Fatal(ex, "uid {Uid} 给 {TargetName} 发送E心跳包时发生意料之外的异常",
                 target.TargetUid,
                 target.TargetName);
+            return null;
         }
         finally
         {
             ResilienceContextPool.Shared.Return(context);
         }
-
-        return payload;
     }
 
-    private async Task<string?> GenerateSAsync(Dictionary<string, string?> payload, string ts,
-        CancellationToken cancellationToken = default)
-    {
-        var t = new JsonObject
-        {
-            { "id", JsonNode.Parse(payload["id"]!) },
-            { "device", payload["device"] },
-            { "ets", int.Parse(payload["ets"]!) },
-            { "benchmark", payload["secret_key"] },
-            { "time", int.Parse(payload["heartbeat_interval"]!) },
-            { "ts", long.Parse(ts) },
-            { "ua", payload["ua"] }
-        };
-
-        var sPayload = new JsonObject
-        {
-            { "t", t },
-            { "r", payload["secret_rule"] }
-        };
-
-        HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
-        {
-            Method = HttpMethod.Post,
-            RequestUri = new Uri("http://localhost:3000/enc"),
-            Content = new StringContent(sPayload.ToJsonString(_options), Encoding.UTF8,
-                "application/json")
-        }, cancellationToken);
-        JsonNode response =
-            await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken) ??
-            throw new LittleHeartException(Reason.NullResponse);
-
-        return (string?)response["s"];
-    }
-
-    private async Task<bool> PostXAsync(TargetModel target, Dictionary<string, string?> payload,
+    private async Task<JsonNode?> PostXAsync(
+        TargetModel target,
+        Dictionary<string, string> payload,
         CancellationToken cancellationToken = default)
     {
         var context = ResilienceContextPool.Shared.Get(cancellationToken);
@@ -348,28 +313,12 @@ public class TargetService : ITargetService
         {
             return await _postXPipeline.ExecuteAsync(async ctx =>
             {
-                string ts = DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString();
-                var xPayload = new Dictionary<string, string?>
-                {
-                    { "s", await GenerateSAsync(payload, ts, cancellationToken) },
-                    { "id", payload["id"] },
-                    { "device", payload["device"] },
-                    { "ets", payload["ets"] },
-                    { "benchmark", payload["secret_key"] },
-                    { "time", payload["heartbeat_interval"] },
-                    { "ts", ts },
-                    { "ua", payload["ua"] },
-                    { "csrf_token", payload["csrf"] },
-                    { "csrf", payload["csrf"] },
-                    { "visit_id", "" }
-                };
-
                 HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
                 {
                     Method = HttpMethod.Post,
                     RequestUri = new Uri("https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/X"),
                     Headers = { { "Cookie", target.UserModel.Cookie } },
-                    Content = new FormUrlEncodedContent(xPayload)
+                    Content = new FormUrlEncodedContent(payload)
                 }, ctx.CancellationToken);
                 JsonNode response =
                     await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, ctx.CancellationToken) ??
@@ -384,22 +333,35 @@ public class TargetService : ITargetService
                             target.TargetName);
                     throw new LittleHeartException(Reason.ServerTimeout);
                 }
-                else if (code == 1012002)
+                else if (code == 1012001)
                 {
-                    //TODO: 已经忘了是什么错误了，以后需要记录，所以即使是预料之内的错误也定级为Error
+                    //签名错误，心跳包加密失败
+                    Console.WriteLine(payload["s"]);
                     _logger.ForContext("Response", response.ToJsonString(_options))
-                        .Error("uid {Uid} 给 {TargetName} 发送X心跳包失败",
+                        .Error("uid {Uid} 给 {TargetName} 发送X心跳包失败，因为签名错误，心跳包加密失败",
                             target.TargetUid,
                             target.TargetName);
+                    return null;
+                }
+                else if (code == 1012002)
+                {
+                    //没有按照规定的时间间隔发送心跳包
+                    _logger.ForContext("Response", response.ToJsonString(_options))
+                        .Warning("uid {Uid} 给 {TargetName} 发送X心跳包失败，因为没有按照规定的时间间隔发送心跳包",
+                            target.TargetUid,
+                            target.TargetName);
+                    return null;
                 }
                 else if (code == 1012003)
                 {
+                    //心跳包时间戳错误
                     _logger.ForContext("Response", response.ToJsonString(_options))
                         .Warning("uid {Uid} 给 {TargetName} 发送X心跳包失败，时间戳错误",
                             target.Uid,
                             target.TargetName);
-                    return false;
+                    return null;
                 }
+
 
                 if (code != 0)
                 {
@@ -411,13 +373,7 @@ public class TargetService : ITargetService
                     throw new LittleHeartException(Reason.Ban);
                 }
 
-                payload["ets"] = response["data"]!["timestamp"]?.GetValue<long>().ToString();
-                payload["secret_key"] = (string?)response["data"]!["secret_key"];
-                payload["heartbeat_interval"] = response["data"]!["heartbeat_interval"]?.GetValue<long>().ToString();
-                JsonArray id = JsonNode.Parse(payload["id"]!)!.AsArray();
-                id[2] = (int)id[2]! + 1;
-                payload["id"] = id.ToJsonString(_options);
-                return true;
+                return response["data"];
             }, context);
         }
         catch (LittleHeartException ex)
@@ -457,14 +413,14 @@ public class TargetService : ITargetService
             _logger.Error(ex, "uid {Uid} 给 {TargetName} 发送X心跳包时发生 Json 异常",
                 target.TargetUid,
                 target.TargetName);
-            return false;
+            return null;
         }
         catch (Exception ex)
         {
             _logger.Fatal(ex, "uid {Uid} 给 {TargetName} 发送X心跳包时发生意料之外的异常",
                 target.TargetUid,
                 target.TargetName);
-            return false;
+            return null;
         }
         finally
         {
@@ -472,6 +428,7 @@ public class TargetService : ITargetService
         }
     }
 
+    //TODO: 2
     private async Task<int?> GetExpAsync(TargetModel target, CancellationToken cancellationToken = default)
     {
         var uri = new Uri(
@@ -529,7 +486,7 @@ public class TargetService : ITargetService
                         string? title = (string?)task!["title"];
                         return title is "观看直播" or "每日首条弹幕" or "每日首次给主播双击点赞";
                     })
-                    .Select(task => (int)task!["cur_progress"]!)
+                    .Select(task => (int)task!["cur_progress"])
                     .Sum();
 
                 return exp;
@@ -590,17 +547,21 @@ public class TargetService : ITargetService
         return target is not { Exp: < 1500, WatchedSeconds: < 75 * 60 };
     }
 
-    private async Task HeartBeatAsync(TargetModel target, Dictionary<string, string?> payload,
+    private async Task HeartBeatAsync(
+        TargetModel target,
+        Dictionary<string, string> ePayload,
+        JsonNode heartbeatData,
         CancellationToken cancellationToken = default)
     {
-        int interval = int.Parse(payload["heartbeat_interval"]!);
-
-        await Task.Delay(interval * 1000, cancellationToken);
-
         while (true)
         {
-            bool postXSuccess = await PostXAsync(target, payload, cancellationToken);
-            if (!postXSuccess)
+            int interval = (int)heartbeatData["heartbeat_interval"]!;
+            await Task.Delay(interval * 1000, cancellationToken);
+
+            var xPayload = GetXPayload(ePayload, heartbeatData);
+
+            var data = await PostXAsync(target, xPayload, cancellationToken);
+            if (data is null)
             {
                 _logger.Verbose("因为 uid {Uid} 给 {TargetName} 发送X心跳包失败，停止继续发包，当前观看时长 {WatchedSeconds} 秒",
                     target.Uid,
@@ -609,7 +570,9 @@ public class TargetService : ITargetService
                 return;
             }
 
-            interval = int.Parse(payload["heartbeat_interval"]!);
+            heartbeatData = data;
+
+            interval = (int)heartbeatData["heartbeat_interval"]!;
             await using var db = new LittleHeartDbContext();
             db.Attach(target);
             target.WatchedSeconds += interval;
@@ -649,8 +612,47 @@ public class TargetService : ITargetService
                     return;
                 }
             }
-
-            await Task.Delay(interval * 1000, cancellationToken);
         }
+    }
+
+    private Dictionary<string, string> GetXPayload(
+        Dictionary<string, string> ePayload,
+        JsonNode heartbeatData)
+    {
+        long ts = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+        var id = JsonNode.Parse(ePayload["id"])!;
+        var device = JsonNode.Parse(ePayload["device"])!;
+
+
+        string key = (string)heartbeatData["secret_key"]!;
+        int[] rules = heartbeatData["secret_rule"]!.Deserialize<int[]>()!;
+        string data = JsonSerializer.Serialize(new
+        {
+            platform = "web",
+            parent_id = id[0],
+            area_id = id[1],
+            seq_id = id[2],
+            room_id = id[3],
+            buvid = device[0],
+            uuid = device[1],
+            ets = heartbeatData["timestamp"],
+            time = heartbeatData["heartbeat_interval"],
+            ts
+        });
+        Console.WriteLine(data);
+        return new Dictionary<string, string>
+        {
+            { "s", LiveHeartbeatEncryptor.Encrypt(data, rules, key) },
+            { "id", ePayload["id"] },
+            { "device", ePayload["device"] },
+            { "ets", heartbeatData["timestamp"]!.GetValue<long>().ToString() },
+            { "benchmark", key },
+            { "time", heartbeatData["heartbeat_interval"]!.GetValue<long>().ToString() },
+            { "ts", ts.ToString() },
+            { "ua", ePayload["ua"] },
+            { "csrf_token", ePayload["csrf"] },
+            { "csrf", ePayload["csrf"] },
+            { "visit_id", "" }
+        };
     }
 }
