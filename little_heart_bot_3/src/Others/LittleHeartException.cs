@@ -1,5 +1,3 @@
-using System.Runtime.Serialization;
-
 namespace little_heart_bot_3.Others;
 
 public class LittleHeartException : Exception
@@ -28,20 +26,13 @@ public class LittleHeartException : Exception
     {
     }
 
-    protected LittleHeartException(SerializationInfo info, StreamingContext context, Reason reason) : base(info,
-        context)
-    {
-        Reason = reason;
-    }
-
     public LittleHeartException(string? message, Reason reason) : base(message)
     {
         Reason = reason;
     }
 
-    public LittleHeartException(string? message, Exception? innerException, Reason reason) : base(
-        message,
-        innerException)
+    public LittleHeartException(string? message, Exception? innerException, Reason reason)
+        : base(message, innerException)
     {
         Reason = reason;
     }
