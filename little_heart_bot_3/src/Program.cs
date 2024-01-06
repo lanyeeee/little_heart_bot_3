@@ -3,7 +3,6 @@ using System.Text.Json;
 using little_heart_bot_3.Data;
 using little_heart_bot_3.Services;
 using little_heart_bot_3.Services.Implements;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;

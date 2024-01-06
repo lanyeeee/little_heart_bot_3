@@ -160,8 +160,6 @@ public class TargetService : ITargetService
             return;
         }
 
-        await db.DisposeAsync();
-
         await HeartBeatAsync(target, payload, cancellationToken);
     }
 

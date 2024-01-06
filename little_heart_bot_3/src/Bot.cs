@@ -69,7 +69,7 @@ public class Bot : BackgroundService
                 switch (ex.Reason)
                 {
                     case Reason.Ban:
-                        cancellationTokenSource.Cancel();
+                        await cancellationTokenSource.CancelAsync();
 
                         int cd = 15;
                         Globals.SendStatus = SendStatus.Cooling;
@@ -99,7 +99,7 @@ public class Bot : BackgroundService
             }
             finally
             {
-                cancellationTokenSource.Cancel();
+                await cancellationTokenSource.CancelAsync();
             }
         }
     }
