@@ -52,7 +52,7 @@ public sealed class App : BackgroundService
                 switch (ex.Reason)
                 {
                     case Reason.Ban:
-                        cancellationTokenSource.Cancel();
+                        await cancellationTokenSource.CancelAsync();
                         Globals.AppStatus = AppStatus.Cooling;
                         int cd = 15;
                         while (cd != 0)

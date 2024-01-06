@@ -147,9 +147,13 @@ public class AppService : IAppService
 
     public async Task SendMessageAsync(List<UserModel> users, CancellationToken cancellationToken)
     {
+        //TODO 2:
+        throw new NotImplementedException();
     }
 
     public async Task WatchLiveAsync(List<UserModel> users, CancellationToken cancellationToken)
     {
+        //TODO 2:
+        throw new NotImplementedException();
     }
 }
