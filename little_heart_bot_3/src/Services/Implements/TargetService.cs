@@ -428,7 +428,6 @@ public class TargetService : ITargetService
         }
     }
 
-    //TODO: 2
     private async Task<int?> GetExpAsync(TargetModel target, CancellationToken cancellationToken = default)
     {
         var uri = new Uri(
@@ -480,14 +479,7 @@ public class TargetService : ITargetService
                     throw new LittleHeartException(Reason.WithoutMedal);
                 }
 
-                int exp = response["data"]!["intimacy_tasks"]!.AsArray()
-                    .Where(task =>
-                    {
-                        string? title = (string?)task!["title"];
-                        return title is "观看直播" or "每日首条弹幕" or "每日首次给主播双击点赞";
-                    })
-                    .Select(task => (int)task!["cur_progress"])
-                    .Sum();
+                int? exp = (int?)response["data"]!["my_fans_medal"]!["today_feed"];
 
                 return exp;
             }, context);
@@ -583,7 +575,6 @@ public class TargetService : ITargetService
                 target.TargetName,
                 target.WatchedSeconds);
 
-
             //每隔5分钟检查一次是否完成
             if (target.WatchedSeconds % 300 == 0)
             {
@@ -623,7 +614,6 @@ public class TargetService : ITargetService
         var id = JsonNode.Parse(ePayload["id"])!;
         var device = JsonNode.Parse(ePayload["device"])!;
 
-
         string key = (string)heartbeatData["secret_key"]!;
         int[] rules = heartbeatData["secret_rule"]!.Deserialize<int[]>()!;
         string data = JsonSerializer.Serialize(new
@@ -639,7 +629,7 @@ public class TargetService : ITargetService
             time = heartbeatData["heartbeat_interval"],
             ts
         });
-        Console.WriteLine(data);
+
         return new Dictionary<string, string>
         {
             { "s", LiveHeartbeatEncryptor.Encrypt(data, rules, key) },
