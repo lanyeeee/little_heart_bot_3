@@ -55,7 +55,6 @@ public class UserService : IUserService
                     case Reason.CookieExpired:
                         _logger.Warning("uid {Uid} 的cookie已过期", message.Uid);
                         user.CookieStatus = CookieStatus.Error;
-                        db.Users.Update(user);
                         await db.SaveChangesAsync(cancellationToken);
                         //Cookie过期，不用再发了，直接返回，这个task正常结束
                         return;

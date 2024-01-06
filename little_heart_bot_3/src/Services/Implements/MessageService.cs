@@ -244,10 +244,10 @@ public class MessageService : IMessageService
     {
         //不管结果，一条弹幕只发一次
         await using var db = new LittleHeartDbContext();
+        db.Attach(message);
         message.Completed = true;
         message.Code = (int)response["code"]!;
         message.Response = response.ToString();
-        db.Messages.Update(message);
         await db.SaveChangesAsync(CancellationToken.None);
 
         if (message.Code == 0)
