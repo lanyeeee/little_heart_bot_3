@@ -92,6 +92,7 @@ public class BotHostedService : BackgroundService
             }
             catch (TaskCanceledException)
             {
+                //ignore
             }
             catch (Exception ex)
             {
@@ -158,7 +159,7 @@ public class BotHostedService : BackgroundService
     private async Task SendMessageAsync(string content, UserModel user, CancellationToken cancellationToken = default)
     {
         _talking = await _botService.SendMessageAsync(_botModel, content, user, cancellationToken);
-        if (_talking == false)
+        if (!_talking)
         {
             _logger.LogWarning("今日停止发送私信，今日共发送了 {talkNum} 条私信", _talkNum);
             return;
@@ -197,7 +198,7 @@ public class BotHostedService : BackgroundService
 
                 string targetName = (string)data["name"]!;
                 long roomId = (long)data["live_room"]!["roomid"]!;
-                TargetModel? target = user.Targets.FirstOrDefault(t => t.TargetUid == targetUid);
+                TargetModel? target = user.Targets.Find(t => t.TargetUid == targetUid);
 
                 if (target is not null)
                 {
@@ -221,7 +222,7 @@ public class BotHostedService : BackgroundService
                     await _db.Targets.AddAsync(target, CancellationToken.None);
                     await _db.SaveChangesAsync(CancellationToken.None);
 
-                    var message = user.Messages.FirstOrDefault(m => m.TargetUid == targetUid);
+                    var message = user.Messages.Find(m => m.TargetUid == targetUid);
 
                     if (message is not null)
                     {
@@ -265,7 +266,7 @@ public class BotHostedService : BackgroundService
                     return;
                 }
 
-                TargetModel? target = user.Targets.FirstOrDefault(t => t.TargetUid == targetUid);
+                TargetModel? target = user.Targets.Find(t => t.TargetUid == targetUid);
                 if (target is not null)
                 {
                     user.Targets.Remove(target);
@@ -293,7 +294,7 @@ public class BotHostedService : BackgroundService
                     return;
                 }
 
-                MessageModel? message = user.Messages.FirstOrDefault(m => m.TargetUid == targetUid);
+                MessageModel? message = user.Messages.Find(m => m.TargetUid == targetUid);
                 if (message is not null)
                 {
                     message.Content = content;
@@ -334,7 +335,7 @@ public class BotHostedService : BackgroundService
             {
                 //需要保留的message(有对应target的message)
                 var updatedMessage = user.Messages.Where(
-                    m => user.Targets.Any(t => t.TargetUid == m.TargetUid)).ToList();
+                    m => user.Targets.Exists(t => t.TargetUid == m.TargetUid)).ToList();
                 foreach (var message in updatedMessage)
                 {
                     message.Content = Globals.DefaultMessageContent;
@@ -359,13 +360,13 @@ public class BotHostedService : BackgroundService
                     return;
                 }
 
-                MessageModel? message = user.Messages.FirstOrDefault(m => m.TargetUid == targetUid);
+                MessageModel? message = user.Messages.Find(m => m.TargetUid == targetUid);
                 if (message is null)
                 {
                     break;
                 }
 
-                TargetModel? target = user.Targets.FirstOrDefault(t => t.TargetUid == targetUid);
+                TargetModel? target = user.Targets.Find(t => t.TargetUid == targetUid);
 
                 if (target is not null)
                 {
@@ -436,7 +437,7 @@ public class BotHostedService : BackgroundService
                 bool parameterIsUid = long.TryParse(parameter, out var targetUid);
                 if (parameterIsUid)
                 {
-                    MessageModel? message = user.Messages.FirstOrDefault(m => m.TargetUid == targetUid);
+                    MessageModel? message = user.Messages.Find(m => m.TargetUid == targetUid);
                     if (message is null)
                     {
                         return;
@@ -493,7 +494,7 @@ public class BotHostedService : BackgroundService
                 bool parameterIsUid = long.TryParse(parameter, out var targetUid);
                 if (parameterIsUid)
                 {
-                    TargetModel? target = user.Targets.FirstOrDefault(t => t.TargetUid == targetUid);
+                    TargetModel? target = user.Targets.Find(t => t.TargetUid == targetUid);
                     if (target is null)
                     {
                         return;
@@ -588,7 +589,7 @@ public class BotHostedService : BackgroundService
                 }
 
                 content = content.Trim();
-                if (!content.StartsWith("/"))
+                if (!content.StartsWith('/'))
                 {
                     continue;
                 }
