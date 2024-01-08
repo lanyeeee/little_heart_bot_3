@@ -41,7 +41,7 @@ public static class LiveHeartbeatEncryptor
 
     private static string HmacMd5(string data, string key)
     {
-        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(key));
+        using var hmac = new HMACMD5(Encoding.UTF8.GetBytes(key));
         byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(data));
         return BitConverter.ToString(hash).Replace("-", "").ToLower();
     }
