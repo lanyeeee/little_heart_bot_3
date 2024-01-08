@@ -3,22 +3,22 @@ using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
 using little_heart_bot_3.Services;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Serilog;
 
 namespace little_heart_bot_3;
 
-public sealed class App : BackgroundService
+public sealed class AppHostedService : BackgroundService
 {
     private readonly ILogger _logger;
-    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IServiceProvider _provider;
+    private readonly IAppService _appService;
 
-    public App([FromKeyedServices("app:Logger")] ILogger logger,
-        IServiceScopeFactory scopeFactory)
+    public AppHostedService([FromKeyedServices("app:Logger")] ILogger logger,
+        IAppService appService,
+        IServiceProvider provider)
     {
         _logger = logger;
-        _scopeFactory = scopeFactory;
+        _provider = provider;
+        _appService = appService;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -27,24 +27,21 @@ public sealed class App : BackgroundService
         {
             using var cancellationTokenSource = new CancellationTokenSource();
 
-            await using var scope = _scopeFactory.CreateAsyncScope();
-            var appService = scope.ServiceProvider.GetRequiredService<IAppService>();
-
-            await using var db = new LittleHeartDbContext();
+            await using var db = _provider.GetRequiredService<LittleHeartDbContext>();
             try
             {
-                await appService.VerifyCookiesAsync(cancellationTokenSource.Token);
+                await _appService.VerifyCookiesAsync(cancellationTokenSource.Token);
                 //TODO: 后续需要改用Semaphore
                 List<UserModel> users = await db.Users.AsNoTracking()
                     .Include(u => u.Messages)
                     .Include(u => u.Targets)
-                    .AsSplitQuery()
                     .Where(u => !u.Completed && u.CookieStatus == CookieStatus.Normal)
+                    .OrderBy(u => u.Id)
                     .Take(30)
                     .ToListAsync(cancellationTokenSource.Token);
 
-                await appService.SendMessageAsync(users, cancellationTokenSource.Token);
-                await appService.WatchLiveAsync(users, cancellationTokenSource.Token);
+                await _appService.SendMessageAsync(users, cancellationTokenSource.Token);
+                await _appService.WatchLiveAsync(users, cancellationTokenSource.Token);
                 Globals.AppStatus = AppStatus.Normal;
             }
             catch (LittleHeartException ex)
@@ -57,7 +54,7 @@ public sealed class App : BackgroundService
                         int cd = 15;
                         while (cd != 0)
                         {
-                            _logger.Error("请求过于频繁，还需冷却 {cd} 分钟", cd);
+                            _logger.LogError("请求过于频繁，还需冷却 {cd} 分钟", cd);
                             await Task.Delay(60 * 1000, CancellationToken.None);
                             cd--;
                         }
@@ -70,7 +67,7 @@ public sealed class App : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.Fatal(ex, "出现预料之外的错误");
+                _logger.LogCritical(ex, "出现预料之外的错误");
                 Console.WriteLine(ex);
             }
             finally

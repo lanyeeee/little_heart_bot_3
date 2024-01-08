@@ -4,17 +4,15 @@ using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
 using little_heart_bot_3.Services;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Serilog;
 
 namespace little_heart_bot_3;
 
-public class Bot : BackgroundService
+public class BotHostedService : BackgroundService
 {
     private readonly ILogger _logger;
     private readonly IBotService _botService;
     private readonly IUserService _userService;
+    private readonly IServiceProvider _provider;
     private LittleHeartDbContext _db = null!;
 
     private bool _talking = true;
@@ -22,23 +20,25 @@ public class Bot : BackgroundService
     private long _yesterdayMidnightTimestamp; //今天0点的分钟时间戳
     private readonly BotModel _botModel;
 
-    public Bot(
+    public BotHostedService(
         [FromKeyedServices("bot:Logger")] ILogger logger,
-        [FromKeyedServices("bot:BotService")] IBotService botService,
-        [FromKeyedServices("bot:UserService")] IUserService userService)
+        IBotService botService,
+        [FromKeyedServices("bot:UserService")] IUserService userService,
+        IServiceProvider provider)
     {
         _logger = logger;
         _botService = botService;
         _userService = userService;
+        _provider = provider;
 
         DateTimeOffset today = DateTime.Today;
         _yesterdayMidnightTimestamp = today.ToUnixTimeSeconds();
 
-        using var db = new LittleHeartDbContext();
+        using var db = _provider.GetRequiredService<LittleHeartDbContext>();
         BotModel? botModel = db.Bots.SingleOrDefault();
         if (botModel is null)
         {
-            _logger.Error("数据库bot_table表中没有数据");
+            _logger.LogError("数据库bot_table表中没有数据");
             throw new Exception("数据库bot_table表中没有数据，请自行添加");
         }
 
@@ -54,7 +54,7 @@ public class Bot : BackgroundService
         while (!stoppingToken.IsCancellationRequested)
         {
             using var cancellationTokenSource = new CancellationTokenSource();
-            _db = new();
+            _db = _provider.GetRequiredService<LittleHeartDbContext>();
             try
             {
                 Task updateSignTask = UpdateSignMain(cancellationTokenSource.Token);
@@ -76,7 +76,7 @@ public class Bot : BackgroundService
                         Globals.ReceiveStatus = ReceiveStatus.Cooling;
                         while (cd != 0)
                         {
-                            _logger.Warning("遇到风控 还需冷却 {cd} 分钟", cd);
+                            _logger.LogWarning("遇到风控 还需冷却 {cd} 分钟", cd);
                             await Task.Delay(60 * 1000, CancellationToken.None);
                             cd--;
                         }
@@ -86,7 +86,7 @@ public class Bot : BackgroundService
                         //TODO: 目前如果小心心bot的cookie过期，直接结束bot的task，后续要支持cookie热更新
                         return;
                     default:
-                        _logger.Fatal(ex, "这种情况不应该发生，如果发生了就是代码编写有问题");
+                        _logger.LogCritical(ex, "这种情况不应该发生，如果发生了就是代码编写有问题");
                         break;
                 }
             }
@@ -95,7 +95,7 @@ public class Bot : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.Fatal(ex, "遇到了意料之外的错误");
+                _logger.LogCritical(ex, "遇到了意料之外的错误");
             }
             finally
             {
@@ -119,11 +119,11 @@ public class Bot : BackgroundService
         long timestamp = _yesterdayMidnightTimestamp;
         _yesterdayMidnightTimestamp = today.ToUnixTimeSeconds();
 
-        _logger.Information("新的一天开始了，昨日零点的时间戳为{timestamp}，今日零点时间戳为 {yesterdayMidnightTimestamp}",
+        _logger.LogInformation("新的一天开始了，昨日零点的时间戳为{timestamp}，今日零点时间戳为 {yesterdayMidnightTimestamp}",
             timestamp,
             _yesterdayMidnightTimestamp);
 
-        await using var db = new LittleHeartDbContext();
+        await using var db = _provider.GetRequiredService<LittleHeartDbContext>();
 
         await foreach (var message in db.Messages)
         {
@@ -160,7 +160,7 @@ public class Bot : BackgroundService
         _talking = await _botService.SendMessageAsync(_botModel, content, user, cancellationToken);
         if (_talking == false)
         {
-            _logger.Warning("今日停止发送私信，今日共发送了 {talkNum} 条私信", _talkNum);
+            _logger.LogWarning("今日停止发送私信，今日共发送了 {talkNum} 条私信", _talkNum);
             return;
         }
 
@@ -171,7 +171,10 @@ public class Bot : BackgroundService
         await _db.SaveChangesAsync(CancellationToken.None);
     }
 
-    private async Task HandleCommandAsync(UserModel user, string command, string? parameter,
+    private async Task HandleCommandAsync(
+        UserModel user,
+        string command,
+        string? parameter,
         CancellationToken cancellationToken = default)
     {
         switch (command)
@@ -395,7 +398,7 @@ public class Bot : BackgroundService
 #if DEBUG
                     Console.WriteLine(ex);
 #endif
-                    _logger.Error(ex, "uid {uid} 提交的cookie有误", user.Uid);
+                    _logger.LogError(ex, "uid {uid} 提交的cookie有误", user.Uid);
                 }
 
                 break;
@@ -546,12 +549,14 @@ public class Bot : BackgroundService
     /// </summary>
     /// <param name="user"></param>
     /// <param name="lastTimestamp"></param>
-    /// <param name="messages"></param>
+    /// <param name="privateMessages"></param>
     /// <param name="cancellationToken"></param>
-    private async Task HandleMessagesAsync(UserModel user, long lastTimestamp, IEnumerable<JsonNode?> messages,
+    private async Task HandlePrivateMessagesAsync(
+        UserModel user, long lastTimestamp,
+        IEnumerable<JsonNode?> privateMessages,
         CancellationToken cancellationToken = default)
     {
-        foreach (var msg in messages)
+        foreach (var msg in privateMessages)
         {
             if (msg is null)
             {
@@ -588,7 +593,7 @@ public class Bot : BackgroundService
                     continue;
                 }
 
-                _logger.Information("{Uid}：{Content}", user.Uid, content);
+                _logger.LogInformation("{Uid}：{Content}", user.Uid, content);
 #if DEBUG
                 Console.WriteLine($"{user.Uid}：{content}");
 #endif
@@ -607,12 +612,12 @@ public class Bot : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.Fatal(ex, "处理uid {Uid} 的消息时出错", user.Uid);
+                _logger.LogCritical(ex, "处理uid {Uid} 的消息时出错", user.Uid);
             }
         }
     }
 
-    private async Task HandleIncomingMessageAsync(CancellationToken cancellationToken = default)
+    private async Task HandleIncomingPrivateMessageAsync(CancellationToken cancellationToken = default)
     {
         IEnumerable<JsonNode?>? sessionList = await _botService.GetSessionListAsync(_botModel, cancellationToken);
         if (sessionList is null)
@@ -620,6 +625,7 @@ public class Bot : BackgroundService
             return;
         }
 
+        //TODO: 需要为每个session进行一次SQL查询，导致性能较差，内存占用高，后续看看能不能优化
         foreach (var session in sessionList)
         {
             if (session is null)
@@ -627,29 +633,14 @@ public class Bot : BackgroundService
                 continue;
             }
 
-            long? nullableUid = (long?)session["talker_id"];
-            if (nullableUid is null)
-            {
-                continue;
-            }
-
-            long uid = nullableUid.Value;
-
-            JsonObject? lastMsg = session["last_msg"]?.AsObject();
-            if (lastMsg is null)
-            {
-                continue;
-            }
-
-            long? timestamp = lastMsg.Count != 0 ? (long?)lastMsg["timestamp"] : 0;
-            if (timestamp is null)
-            {
-                continue;
-            }
+            long uid = (long)session["talker_id"]!;
+            JsonObject lastMsg = session["last_msg"]!.AsObject();
+            long? timestamp = lastMsg.Count != 0 ? (long)lastMsg["timestamp"]! : 0;
 
             var user = await _db.Users
                 .Include(u => u.Messages)
                 .Include(u => u.Targets)
+                .AsSplitQuery()
                 .FirstOrDefaultAsync(u => u.Uid == uid, cancellationToken);
 
             if (user is null) //新用户
@@ -663,15 +654,15 @@ public class Bot : BackgroundService
                     ConfigTimestamp = 0,
                     ConfigNum = 0
                 };
-                IEnumerable<JsonNode?>? messages =
+                IEnumerable<JsonNode?>? privateMessages =
                     await _botService.GetMessagesAsync(_botModel, user, cancellationToken);
 
-                await _db.Users.AddAsync(user, CancellationToken.None);
+                await _db.AddAsync(user, CancellationToken.None);
                 await _db.SaveChangesAsync(CancellationToken.None);
 
-                if (messages is not null)
+                if (privateMessages is not null)
                 {
-                    await HandleMessagesAsync(user, 0, messages, cancellationToken);
+                    await HandlePrivateMessagesAsync(user, 0, privateMessages, cancellationToken);
                 }
             }
             else if (timestamp > user.ReadTimestamp) //发新消息的用户
@@ -686,7 +677,7 @@ public class Bot : BackgroundService
 
                 if (messages is not null)
                 {
-                    await HandleMessagesAsync(user, readTimestamp, messages, cancellationToken);
+                    await HandlePrivateMessagesAsync(user, readTimestamp, messages, cancellationToken);
                 }
             }
         }
@@ -708,7 +699,7 @@ public class Bot : BackgroundService
         while (!cancellationToken.IsCancellationRequested)
         {
             await CheckNewDayAsync();
-            await HandleIncomingMessageAsync(cancellationToken);
+            await HandleIncomingPrivateMessageAsync(cancellationToken);
 
             Globals.ReceiveStatus = ReceiveStatus.Normal;
             Globals.SendStatus = _talking ? SendStatus.Normal : SendStatus.Forbidden;

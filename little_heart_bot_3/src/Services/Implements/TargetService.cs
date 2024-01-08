@@ -6,7 +6,6 @@ using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
 using Polly;
 using Polly.Retry;
-using Serilog;
 
 namespace little_heart_bot_3.Services.Implements;
 
@@ -15,6 +14,7 @@ public class TargetService : ITargetService
     private readonly ILogger _logger;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
+    private readonly IServiceProvider _provider;
 
     private readonly ResiliencePipeline _postEPipeline;
     private readonly ResiliencePipeline _postXPipeline;
@@ -23,11 +23,13 @@ public class TargetService : ITargetService
     public TargetService(
         ILogger logger,
         JsonSerializerOptions options,
-        HttpClient httpClient)
+        HttpClient httpClient,
+        IServiceProvider provider)
     {
         _logger = logger;
         _options = options;
         _httpClient = httpClient;
+        _provider = provider;
 
 
         _postEPipeline = new ResiliencePipelineBuilder()
@@ -42,7 +44,7 @@ public class TargetService : ITargetService
                 OnRetry = args =>
                 {
                     var target = args.Context.Properties.GetValue(LittleHeartResilienceKeys.Target, null)!;
-                    _logger.Warning(args.Outcome.Exception,
+                    _logger.LogWarning(args.Outcome.Exception,
                         "uid {Uid} 发送E心跳包时遇到异常，准备在 {RetryDelay} 秒后进行第 {AttemptNumber} 次重试",
                         target.Uid,
                         args.RetryDelay.TotalSeconds,
@@ -65,7 +67,7 @@ public class TargetService : ITargetService
                 OnRetry = args =>
                 {
                     var target = args.Context.Properties.GetValue(LittleHeartResilienceKeys.Target, null)!;
-                    _logger.Warning(args.Outcome.Exception,
+                    _logger.LogWarning(args.Outcome.Exception,
                         "uid {Uid} 发送X心跳包时遇到异常，准备在 {RetryDelay} 秒后进行第 {AttemptNumber} 次重试",
                         target.Uid,
                         args.RetryDelay.TotalSeconds,
@@ -88,7 +90,7 @@ public class TargetService : ITargetService
                 OnRetry = args =>
                 {
                     var target = args.Context.Properties.GetValue(LittleHeartResilienceKeys.Target, null)!;
-                    _logger.Warning(args.Outcome.Exception,
+                    _logger.LogWarning(args.Outcome.Exception,
                         "uid {Uid} 查询 {TargetName} 粉丝牌信息时遇到异常，准备在 {RetryDelay} 秒后进行第 {AttemptNumber} 次重试",
                         target.Uid,
                         target.TargetName,
@@ -102,7 +104,7 @@ public class TargetService : ITargetService
 
     public async Task StartAsync(TargetModel target, CancellationToken cancellationToken = default)
     {
-        await using var db = new LittleHeartDbContext();
+        await using var db = _provider.GetRequiredService<LittleHeartDbContext>();
         db.Targets.Attach(target);
 
         int? exp = await GetExpAsync(target, cancellationToken);
@@ -120,7 +122,7 @@ public class TargetService : ITargetService
 #if DEBUG
         Console.WriteLine($"uid {target.Uid} 在 {target.TargetName} 直播间的经验为 {target.Exp}");
 #endif
-        _logger.Verbose("uid {Uid} 在 {TargetName} 直播间的经验为 {Exp}",
+        _logger.LogTrace("uid {Uid} 在 {TargetName} 直播间的经验为 {Exp}",
             target.Uid,
             target.TargetName,
             target.Exp);
@@ -128,7 +130,7 @@ public class TargetService : ITargetService
         //如果已经完成，直接返回
         if (IsCompleted(target))
         {
-            _logger.Information("uid {Uid} 在 {TargetName} 的任务完成，观看时长 {WatchedSeconds} 秒，获得经验 {Exp}",
+            _logger.LogInformation("uid {Uid} 在 {TargetName} 的任务完成，观看时长 {WatchedSeconds} 秒，获得经验 {Exp}",
                 target.Uid,
                 target.TargetName,
                 target.WatchedSeconds,
@@ -155,7 +157,7 @@ public class TargetService : ITargetService
         JsonNode id = JsonNode.Parse(ePayload["id"])!;
         if ((int)id[0]! == 0 || (int)id[1]! == 0)
         {
-            _logger.Warning("uid {Uid} 在 {TargetName} 的任务完成，观看时长为0因为 {TargetName} 的直播间没有选择分区，无法观看",
+            _logger.LogWarning("uid {Uid} 在 {TargetName} 的任务完成，观看时长为0因为 {TargetName} 的直播间没有选择分区，无法观看",
                 target.Uid,
                 target.TargetName,
                 target.TargetName);
@@ -171,7 +173,7 @@ public class TargetService : ITargetService
     private async Task<Dictionary<string, string>?> GetEPayloadAsync(TargetModel target,
         CancellationToken cancellationToken = default)
     {
-        await using var db = new LittleHeartDbContext();
+        await using var db = _provider.GetRequiredService<LittleHeartDbContext>();
         db.Attach(target);
 
         var uri = new Uri(
@@ -189,9 +191,11 @@ public class TargetService : ITargetService
 
         if (code == 19002005) //房间已加密
         {
-            _logger.ForContext("Response", response.ToJsonString(_options))
-                .Warning("获取uid {uid} 直播间的信息失败",
-                    target.TargetUid);
+            _logger.LogWithResponse(
+                () => _logger
+                    .LogWarning("获取uid {uid} 直播间的信息失败",
+                        target.TargetUid),
+                response.ToJsonString(_options));
 
             target.Completed = true;
             await db.SaveChangesAsync(CancellationToken.None);
@@ -199,9 +203,11 @@ public class TargetService : ITargetService
         }
         else if (code != 0)
         {
-            _logger.ForContext("Response", response.ToJsonString(_options))
-                .Error("获取uid {uid} 直播间的信息失败",
-                    target.TargetUid);
+            _logger.LogWithResponse(
+                () => _logger
+                    .LogError("获取uid {uid} 直播间的信息失败",
+                        target.TargetUid),
+                response.ToJsonString(_options));
             throw new LittleHeartException(Reason.Ban);
         }
 
@@ -253,10 +259,11 @@ public class TargetService : ITargetService
                 int code = (int)response["code"]!;
                 if (code != 0)
                 {
-                    //TODO: 以后需要记录 风控 和 Cookie过期 的code，专门处理
-                    _logger.ForContext("Response", response.ToJsonString(_options))
-                        .Error("uid {uid} 发送E心跳包失败",
-                            target.TargetUid);
+                    _logger.LogWithResponse(
+                        () => _logger
+                            .LogError("uid {uid} 发送E心跳包失败",
+                                target.TargetUid),
+                        response.ToJsonString(_options));
                     throw new LittleHeartException(Reason.Ban);
                 }
 
@@ -268,7 +275,7 @@ public class TargetService : ITargetService
             switch (ex.Reason)
             {
                 case Reason.NullResponse:
-                    _logger.Error("uid {Uid} 给 {TargetName} 发送E心跳包时出现 NullResponse 异常，且重试多次后仍然出现异常",
+                    _logger.LogError("uid {Uid} 给 {TargetName} 发送E心跳包时出现 NullResponse 异常，且重试多次后仍然出现异常",
                         target.Uid,
                         target.TargetName);
                     ex.Reason = Reason.Ban;
@@ -279,7 +286,7 @@ public class TargetService : ITargetService
         }
         catch (HttpRequestException ex)
         {
-            _logger.Error(ex,
+            _logger.LogError(ex,
                 "uid {Uid} 给 {TargetName} 发送E心跳包时出现 HttpRequestException 异常，且重试多次后仍然出现异常",
                 target.Uid,
                 target.TargetName);
@@ -291,7 +298,7 @@ public class TargetService : ITargetService
         }
         catch (Exception ex)
         {
-            _logger.Fatal(ex, "uid {Uid} 给 {TargetName} 发送E心跳包时发生意料之外的异常",
+            _logger.LogCritical(ex, "uid {Uid} 给 {TargetName} 发送E心跳包时发生意料之外的异常",
                 target.TargetUid,
                 target.TargetName);
             return null;
@@ -327,49 +334,54 @@ public class TargetService : ITargetService
                 int code = (int)response["code"]!;
                 if (code == -504)
                 {
-                    _logger.ForContext("Response", response.ToJsonString(_options))
-                        .Warning("uid {Uid} 给 {TargetName} 发送X心跳包失败，服务器调用超时",
+                    _logger.LogWithResponse(
+                        () => _logger.LogWarning("uid {Uid} 给 {TargetName} 发送X心跳包失败，服务器调用超时",
                             target.Uid,
-                            target.TargetName);
+                            target.TargetName),
+                        response.ToJsonString(_options));
                     throw new LittleHeartException(Reason.ServerTimeout);
                 }
                 else if (code == 1012001)
                 {
                     //签名错误，心跳包加密失败
                     Console.WriteLine(payload["s"]);
-                    _logger.ForContext("Response", response.ToJsonString(_options))
-                        .Error("uid {Uid} 给 {TargetName} 发送X心跳包失败，因为签名错误，心跳包加密失败",
+                    _logger.LogWithResponse(
+                        () => _logger.LogError("uid {Uid} 给 {TargetName} 发送X心跳包失败，因为签名错误，心跳包加密失败",
                             target.TargetUid,
-                            target.TargetName);
+                            target.TargetName),
+                        response.ToJsonString(_options));
                     return null;
                 }
                 else if (code == 1012002)
                 {
                     //没有按照规定的时间间隔发送心跳包
-                    _logger.ForContext("Response", response.ToJsonString(_options))
-                        .Warning("uid {Uid} 给 {TargetName} 发送X心跳包失败，因为没有按照规定的时间间隔发送心跳包",
+                    _logger.LogWithResponse(
+                        () => _logger.LogWarning(
+                            "uid {Uid} 给 {TargetName} 发送X心跳包失败，因为没有按照规定的时间间隔发送心跳包",
                             target.TargetUid,
-                            target.TargetName);
+                            target.TargetName),
+                        response.ToJsonString(_options));
                     return null;
                 }
                 else if (code == 1012003)
                 {
                     //心跳包时间戳错误
-                    _logger.ForContext("Response", response.ToJsonString(_options))
-                        .Warning("uid {Uid} 给 {TargetName} 发送X心跳包失败，时间戳错误",
+                    _logger.LogWithResponse(
+                        () => _logger.LogWarning("uid {Uid} 给 {TargetName} 发送X心跳包失败，时间戳错误",
                             target.Uid,
-                            target.TargetName);
+                            target.TargetName),
+                        response.ToJsonString(_options));
                     return null;
                 }
 
 
                 if (code != 0)
                 {
-                    //TODO: 以后需要记录风控的code，专门处理
-                    _logger.ForContext("Response", response.ToJsonString(_options))
-                        .Error("uid {Uid} 给 {TargetName} 发送X心跳包失败",
+                    _logger.LogWithResponse(
+                        () => _logger.LogError("uid {Uid} 给 {TargetName} 发送X心跳包失败",
                             target.TargetUid,
-                            target.TargetName);
+                            target.TargetName),
+                        response.ToJsonString(_options));
                     throw new LittleHeartException(Reason.Ban);
                 }
 
@@ -381,13 +393,13 @@ public class TargetService : ITargetService
             switch (ex.Reason)
             {
                 case Reason.NullResponse:
-                    _logger.Error("uid {Uid} 给 {TargetName} 发送X心跳包时出现 NullResponse 异常，且重试多次后仍然出现异常",
+                    _logger.LogError("uid {Uid} 给 {TargetName} 发送X心跳包时出现 NullResponse 异常，且重试多次后仍然出现异常",
                         target.Uid,
                         target.TargetName);
                     ex.Reason = Reason.Ban;
                     throw;
                 case Reason.ServerTimeout:
-                    _logger.Error("uid {Uid} 给 {TargetName} 发送X心跳包时出现 ServerTimeout 异常，且重试多次后仍然出现异常",
+                    _logger.LogError("uid {Uid} 给 {TargetName} 发送X心跳包时出现 ServerTimeout 异常，且重试多次后仍然出现异常",
                         target.Uid,
                         target.TargetName);
                     ex.Reason = Reason.Ban;
@@ -398,7 +410,7 @@ public class TargetService : ITargetService
         }
         catch (HttpRequestException ex)
         {
-            _logger.Error(ex,
+            _logger.LogError(ex,
                 "uid {Uid} 给 {TargetName} 发送X心跳包时出现 HttpRequestException 异常，且重试多次后仍然出现异常",
                 target.Uid,
                 target.TargetName);
@@ -410,14 +422,14 @@ public class TargetService : ITargetService
         }
         catch (JsonException ex)
         {
-            _logger.Error(ex, "uid {Uid} 给 {TargetName} 发送X心跳包时发生 Json 异常",
+            _logger.LogError(ex, "uid {Uid} 给 {TargetName} 发送X心跳包时发生 Json 异常",
                 target.TargetUid,
                 target.TargetName);
             return null;
         }
         catch (Exception ex)
         {
-            _logger.Fatal(ex, "uid {Uid} 给 {TargetName} 发送X心跳包时发生意料之外的异常",
+            _logger.LogCritical(ex, "uid {Uid} 给 {TargetName} 发送X心跳包时发生意料之外的异常",
                 target.TargetUid,
                 target.TargetName);
             return null;
@@ -453,29 +465,31 @@ public class TargetService : ITargetService
                 int code = (int)response["code"]!;
                 if (code == -101)
                 {
-                    _logger.ForContext("Response", response.ToJsonString(_options))
-                        .Warning("uid {Uid} 的cookie已过期",
-                            target.Uid);
+                    _logger.LogWithResponse(
+                        () => _logger.LogWarning("uid {Uid} 的cookie已过期",
+                            target.Uid),
+                        response.ToJsonString(_options));
                     throw new LittleHeartException(Reason.CookieExpired);
                 }
 
                 if (code != 0)
                 {
-                    //TODO: 以后需要记录风控的code，专门处理
-                    _logger.ForContext("Response", response.ToJsonString(_options))
-                        .Error("uid {Uid} 查询 {TargetName} 的粉丝牌信息失败",
+                    _logger.LogWithResponse(
+                        () => _logger.LogError("uid {Uid} 查询 {TargetName} 的粉丝牌信息失败",
                             target.Uid,
-                            target.TargetName);
+                            target.TargetName),
+                        response.ToJsonString(_options));
                     throw new LittleHeartException(Reason.Ban);
                 }
 
                 bool hasMedal = (bool)response["data"]!["has_fans_medal"]!;
                 if (!hasMedal)
                 {
-                    _logger.ForContext("Response", response.ToJsonString(_options))
-                        .Warning("uid {uid} 未持有 {TargetName} 的粉丝牌",
+                    _logger.LogWithResponse(
+                        () => _logger.LogWarning("uid {uid} 未持有 {TargetName} 的粉丝牌",
                             target.Uid,
-                            target.TargetName);
+                            target.TargetName),
+                        response.ToJsonString(_options));
                     throw new LittleHeartException(Reason.WithoutMedal);
                 }
 
@@ -492,14 +506,14 @@ public class TargetService : ITargetService
                 case Reason.CookieExpired:
                     throw;
                 case Reason.NullResponse:
-                    _logger.Error("uid {Uid} 查询 {TargetName} 的粉丝牌信息时出现 NullResponse 异常，且重试多次后仍然出现异常",
+                    _logger.LogError("uid {Uid} 查询 {TargetName} 的粉丝牌信息时出现 NullResponse 异常，且重试多次后仍然出现异常",
                         target.Uid,
                         target.TargetName);
                     ex.Reason = Reason.Ban;
                     throw;
                 case Reason.WithoutMedal:
                 {
-                    await using var db = new LittleHeartDbContext();
+                    await using var db = _provider.GetRequiredService<LittleHeartDbContext>();
                     db.Remove(target);
                     await db.SaveChangesAsync(CancellationToken.None);
                     return null;
@@ -510,7 +524,7 @@ public class TargetService : ITargetService
         }
         catch (HttpRequestException ex)
         {
-            _logger.Error(ex,
+            _logger.LogError(ex,
                 "uid {Uid} 查询 {TargetName} 的粉丝牌信息时出现 HttpRequestException 异常，且重试多次后仍然出现异常",
                 target.Uid,
                 target.TargetName);
@@ -522,7 +536,7 @@ public class TargetService : ITargetService
         }
         catch (Exception ex)
         {
-            _logger.Fatal(ex, "uid {Uid} 获取 {TargetName} 粉丝牌经验时发生意料之外的异常",
+            _logger.LogCritical(ex, "uid {Uid} 获取 {TargetName} 粉丝牌经验时发生意料之外的异常",
                 target.TargetUid,
                 target.TargetName);
             return null;
@@ -555,7 +569,7 @@ public class TargetService : ITargetService
             var data = await PostXAsync(target, xPayload, cancellationToken);
             if (data is null)
             {
-                _logger.Verbose("因为 uid {Uid} 给 {TargetName} 发送X心跳包失败，停止继续发包，当前观看时长 {WatchedSeconds} 秒",
+                _logger.LogTrace("因为 uid {Uid} 给 {TargetName} 发送X心跳包失败，停止继续发包，当前观看时长 {WatchedSeconds} 秒",
                     target.Uid,
                     target.TargetName,
                     target.WatchedSeconds);
@@ -565,12 +579,12 @@ public class TargetService : ITargetService
             heartbeatData = data;
 
             interval = (int)heartbeatData["heartbeat_interval"]!;
-            await using var db = new LittleHeartDbContext();
+            await using var db = _provider.GetRequiredService<LittleHeartDbContext>();
             db.Attach(target);
             target.WatchedSeconds += interval;
             await db.SaveChangesAsync(CancellationToken.None);
 
-            _logger.Verbose("uid {Uid} 给 {TargetName} 发送X心跳包成功，当前观看时长 {WatchedSeconds} 秒",
+            _logger.LogTrace("uid {Uid} 给 {TargetName} 发送X心跳包成功，当前观看时长 {WatchedSeconds} 秒",
                 target.Uid,
                 target.TargetName,
                 target.WatchedSeconds);
@@ -593,7 +607,7 @@ public class TargetService : ITargetService
                 //再根据经验和观看时长判断是否完成
                 if (IsCompleted(target))
                 {
-                    _logger.Information("uid {Uid} 在 {TargetName} 的任务完成，观看时长 {WatchedSeconds} 秒，获得经验 {Exp}",
+                    _logger.LogInformation("uid {Uid} 在 {TargetName} 的任务完成，观看时长 {WatchedSeconds} 秒，获得经验 {Exp}",
                         target.Uid,
                         target.TargetName,
                         target.WatchedSeconds,
@@ -632,17 +646,17 @@ public class TargetService : ITargetService
 
         return new Dictionary<string, string>
         {
-            { "s", LiveHeartbeatEncryptor.Encrypt(data, rules, key) },
-            { "id", ePayload["id"] },
-            { "device", ePayload["device"] },
-            { "ets", heartbeatData["timestamp"]!.GetValue<long>().ToString() },
-            { "benchmark", key },
-            { "time", heartbeatData["heartbeat_interval"]!.GetValue<long>().ToString() },
-            { "ts", ts.ToString() },
-            { "ua", ePayload["ua"] },
-            { "csrf_token", ePayload["csrf"] },
-            { "csrf", ePayload["csrf"] },
-            { "visit_id", "" }
+            ["s"] = LiveHeartbeatEncryptor.Encrypt(data, rules, key),
+            ["id"] = ePayload["id"],
+            ["device"] = ePayload["device"],
+            ["ets"] = heartbeatData["timestamp"]!.GetValue<long>().ToString(),
+            ["benchmark"] = key,
+            ["time"] = heartbeatData["heartbeat_interval"]!.GetValue<long>().ToString(),
+            ["ts"] = ts.ToString(),
+            ["ua"] = ePayload["ua"],
+            ["csrf_token"] = ePayload["csrf"],
+            ["csrf"] = ePayload["csrf"],
+            ["visit_id"] = ""
         };
     }
 }

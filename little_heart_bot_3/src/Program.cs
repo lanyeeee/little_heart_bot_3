@@ -1,73 +1,94 @@
 ﻿using System.Text.Encodings.Web;
 using System.Text.Json;
+using little_heart_bot_3;
 using little_heart_bot_3.Data;
 using little_heart_bot_3.Services;
 using little_heart_bot_3.Services.Implements;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
+using little_heart_bot_3.Services.Implements.App;
+using little_heart_bot_3.Services.Implements.Bot;
+using Microsoft.EntityFrameworkCore;
+using MySqlConnector;
 using Serilog;
 using Serilog.Enrichers.WithCaller;
 using Serilog.Templates;
+using ILogger = Microsoft.Extensions.Logging.ILogger;
 
-namespace little_heart_bot_3;
+var builder = Host.CreateApplicationBuilder(args);
 
-public class Program
-{
-    public static void Main(string[] args)
+builder.Services.AddDbContext<LittleHeartDbContext>(options =>
     {
-        var builder = Host.CreateApplicationBuilder(args);
-
-        builder.Services.AddDbContext<LittleHeartDbContext>();
-        builder.Services.AddSingleton<HttpClient>();
-        builder.Services.AddSingleton<JsonSerializerOptions>(_ => new JsonSerializerOptions
+        var connectionStringBuilder = new MySqlConnectionStringBuilder
         {
-            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-        });
+            Server = builder.Configuration["MYSQL:host"],
+            Database = builder.Configuration["MYSQL:database"],
+            UserID = builder.Configuration["MYSQL:user"],
+            Password = builder.Configuration["MYSQL:password"]
+        };
 
-        var logFormatter = new ExpressionTemplate("{ {ts:@t, template:@mt, msg:@m, level:@l, ex:@x, p:{..@p}} }\n");
-        builder.Services.AddKeyedSingleton<ILogger>("bot:Logger", (_, _) => new LoggerConfiguration()
-            .MinimumLevel.Debug()
-            .WriteTo.File(
-                path: "logs/bot/bot-.txt",
-                rollingInterval: RollingInterval.Day,
-                fileSizeLimitBytes: 1 * 1024 * 1024,
-                rollOnFileSizeLimit: true,
-                buffered: true,
-                flushToDiskInterval: TimeSpan.FromSeconds(10),
-                formatter: logFormatter)
-            .Enrich.WithCaller(true)
-            .CreateLogger());
+        var serverVersion = ServerVersion.AutoDetect(connectionStringBuilder.ConnectionString);
 
-        builder.Services.AddKeyedSingleton<ILogger>("app:Logger", (_, _) => new LoggerConfiguration()
-            .MinimumLevel.Debug()
-            .WriteTo.File(
-                path: "logs/app/app-.txt",
-                rollingInterval: RollingInterval.Day,
-                fileSizeLimitBytes: 2 * 1024 * 1024,
-                rollOnFileSizeLimit: true,
-                buffered: true,
-                flushToDiskInterval: TimeSpan.FromSeconds(1),
-                formatter: logFormatter)
-            .Enrich.WithCaller(true)
-            .CreateLogger());
+        options.UseMySql(connectionStringBuilder.ConnectionString, serverVersion);
+    },
+    ServiceLifetime.Transient
+);
+builder.Services.AddSingleton<HttpClient>();
+builder.Services.AddSingleton<JsonSerializerOptions>(_ => new JsonSerializerOptions
+{
+    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+});
 
-        builder.Services.AddScoped<IBotService, BotService>();
-        builder.Services.AddScoped<IAppService, AppService>();
+var logFormatter = new ExpressionTemplate("{ {ts:@t, template:@mt, msg:@m, level:@l, ex:@x, p:{..@p}} }\n");
 
-//MessageService
-        builder.Services.AddKeyedScoped<IMessageService, Services.Implements.Bot.MessageService>("bot:MessageService");
-        builder.Services.AddKeyedScoped<IMessageService, Services.Implements.App.MessageService>("app:MessageService");
-//TargetService
-        builder.Services.AddKeyedScoped<ITargetService, Services.Implements.Bot.TargetService>("bot:TargetService");
-        builder.Services.AddKeyedScoped<ITargetService, Services.Implements.App.TargetService>("app:TargetService");
-//UserService
-        builder.Services.AddKeyedScoped<IUserService, Services.Implements.Bot.UserService>("bot:UserService");
-        builder.Services.AddKeyedScoped<IUserService, Services.Implements.App.UserService>("app:UserService");
+builder.Services.AddKeyedSingleton<ILogger>("bot:Logger", (_, _) =>
+{
+    var serilog = new LoggerConfiguration()
+        .MinimumLevel.Verbose()
+        .WriteTo.File(
+            path: "logs/bot/bot-.txt",
+            rollingInterval: RollingInterval.Day,
+            fileSizeLimitBytes: 1 * 1024 * 1024,
+            rollOnFileSizeLimit: true,
+            buffered: true,
+            flushToDiskInterval: TimeSpan.FromSeconds(10),
+            formatter: logFormatter)
+        .Enrich.WithCaller(true)
+        .CreateLogger();
+    return new Logger<Serilog.ILogger>(LoggerFactory.Create(loggerBuilder => loggerBuilder.AddSerilog(serilog)));
+});
 
-        builder.Services.AddHostedService<Bot>();
-        builder.Services.AddHostedService<App>();
+builder.Services.AddKeyedSingleton<ILogger>("app:Logger", (_, _) =>
+{
+    var serilog = new LoggerConfiguration()
+        .MinimumLevel.Verbose()
+        .WriteTo.File(
+            path: "logs/app/app-.txt",
+            rollingInterval: RollingInterval.Day,
+            fileSizeLimitBytes: 2 * 1024 * 1024,
+            rollOnFileSizeLimit: true,
+            buffered: true,
+            flushToDiskInterval: TimeSpan.FromSeconds(1),
+            formatter: logFormatter)
+        .Enrich.WithCaller(true)
+        .CreateLogger();
+    return new Logger<Serilog.ILogger>(LoggerFactory.Create(loggerBuilder => loggerBuilder.AddSerilog(serilog)));
+});
 
-        var host = builder.Build();
-        host.Run();
-    }
-}
+builder.Services.AddSingleton<IBotService, BotService>();
+builder.Services.AddSingleton<IAppService, AppService>();
+
+//AppMessageService
+builder.Services.AddKeyedSingleton<IMessageService, BotMessageService>("bot:MessageService");
+builder.Services.AddKeyedSingleton<IMessageService, AppMessageService>("app:MessageService");
+//BotTargetService
+builder.Services.AddKeyedSingleton<ITargetService, BotTargetService>("bot:TargetService");
+builder.Services.AddKeyedSingleton<ITargetService, AppTargetService>("app:TargetService");
+//BotUserService
+builder.Services.AddKeyedSingleton<IUserService, BotUserService>("bot:UserService");
+builder.Services.AddKeyedSingleton<IUserService, AppUserService>("app:UserService");
+
+builder.Services.AddHostedService<BotHostedService>();
+builder.Services.AddHostedService<AppHostedService>();
+
+var host = builder.Build();
+
+host.Run();

@@ -5,7 +5,6 @@ using System.Text.Json.Nodes;
 using little_heart_bot_3.Data;
 using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
-using Serilog;
 
 namespace little_heart_bot_3.Services.Implements;
 
@@ -16,6 +15,7 @@ public class UserService : IUserService
     private readonly ITargetService _targetService;
     private readonly HttpClient _httpClient;
     private readonly JsonSerializerOptions _options;
+    private readonly IServiceProvider _provider;
 
 
     public UserService(
@@ -23,18 +23,20 @@ public class UserService : IUserService
         IMessageService messageService,
         ITargetService targetService,
         JsonSerializerOptions options,
-        HttpClient httpClient)
+        HttpClient httpClient,
+        IServiceProvider provider)
     {
         _logger = logger;
         _messageService = messageService;
         _targetService = targetService;
         _options = options;
         _httpClient = httpClient;
+        _provider = provider;
     }
 
     public async Task SendMessageAsync(UserModel user, CancellationToken cancellationToken = default)
     {
-        await using var db = new LittleHeartDbContext();
+        await using var db = _provider.GetRequiredService<LittleHeartDbContext>();
         db.Attach(user);
 
         foreach (var message in user.Messages)
@@ -53,7 +55,7 @@ public class UserService : IUserService
                 switch (ex.Reason)
                 {
                     case Reason.CookieExpired:
-                        _logger.Warning("uid {Uid} 的cookie已过期", message.Uid);
+                        _logger.LogWarning("uid {Uid} 的cookie已过期", message.Uid);
                         user.CookieStatus = CookieStatus.Error;
                         await db.SaveChangesAsync(cancellationToken);
                         //Cookie过期，不用再发了，直接返回，这个task正常结束
@@ -68,7 +70,7 @@ public class UserService : IUserService
 
     public async Task WatchLiveAsync(UserModel user, CancellationToken cancellationToken = default)
     {
-        await using var db = new LittleHeartDbContext();
+        await using var db = _provider.GetRequiredService<LittleHeartDbContext>();
         db.Users.Attach(user);
 
         //TODO: 改用Semaphore限制
@@ -85,7 +87,7 @@ public class UserService : IUserService
 
             var task = _targetService.StartAsync(target, cancellationToken);
             tasks.Add(task);
-            _logger.Verbose("uid {Uid} 开始观看 {TargetName} 的直播",
+            _logger.LogTrace("uid {Uid} 开始观看 {TargetName} 的直播",
                 user.Uid, target.TargetName);
 
             await Task.Delay(500, cancellationToken);
@@ -97,7 +99,7 @@ public class UserService : IUserService
             }
         }
 
-        _logger.Information("uid {Uid} 正在观看直播，目前同时观看 {SelectedCount} 个目标", user.Uid, selectedCount);
+        _logger.LogInformation("uid {Uid} 正在观看直播，目前同时观看 {SelectedCount} 个目标", user.Uid, selectedCount);
 
         try
         {
@@ -116,7 +118,7 @@ public class UserService : IUserService
             }
 
             //如果所有任务都完成了
-            _logger.Information("uid {Uid} 今日的所有任务已完成", user.Uid);
+            _logger.LogInformation("uid {Uid} 今日的所有任务已完成", user.Uid);
             user.Completed = true;
             await db.SaveChangesAsync(CancellationToken.None);
         }
@@ -125,7 +127,7 @@ public class UserService : IUserService
             switch (ex.Reason)
             {
                 case Reason.CookieExpired:
-                    _logger.Warning("uid {Uid} 的cookie已过期", user.Uid);
+                    _logger.LogWarning("uid {Uid} 的cookie已过期", user.Uid);
                     user.CookieStatus = CookieStatus.Error;
                     await db.SaveChangesAsync(CancellationToken.None);
                     //Cookie过期，不用再看，直接返回，这个task正常结束
@@ -166,7 +168,7 @@ public class UserService : IUserService
 
         if (code is -400 or -404)
         {
-            _logger.Error(new Exception(response.ToJsonString(_options)),
+            _logger.LogError(new Exception(response.ToJsonString(_options)),
                 "uid {uid} 获取 {targetUid} 的直播间数据失败",
                 user.Uid,
                 uid);
@@ -175,7 +177,7 @@ public class UserService : IUserService
 
         if (code != 0)
         {
-            _logger.Error(new Exception(response.ToJsonString(_options)),
+            _logger.LogError(new Exception(response.ToJsonString(_options)),
                 "uid {uid} 获取 {targetUid} 的直播间数据失败",
                 user.Uid,
                 uid);
