@@ -1,10 +1,10 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Worker">
 
     <PropertyGroup>
-        <OutputType>Exe</OutputType>
         <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     </PropertyGroup>
 
     <ItemGroup>
@@ -19,10 +19,16 @@
         <PackageReference Include="Polly" Version="8.0.0"/>
         <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="6.0.2"/>
         <PackageReference Include="Portable.BouncyCastle" Version="1.9.0"/>
-        <PackageReference Include="Serilog" Version="3.1.0-dev-02086"/>
+        <PackageReference Include="Serilog" Version="3.1.2-dev-02097"/>
         <PackageReference Include="Serilog.Enrichers.WithCaller" Version="1.2.0"/>
-        <PackageReference Include="Serilog.Expressions" Version="4.0.0-dev-00139"/>
-        <PackageReference Include="Serilog.Sinks.File" Version="5.0.1-dev-00968"/>
+        <PackageReference Include="Serilog.Expressions" Version="4.0.0"/>
+        <PackageReference Include="Serilog.Extensions.Hosting" Version="8.0.0"/>
+        <PackageReference Include="Serilog.Sinks.File" Version="5.0.1-dev-00972"/>
     </ItemGroup>
 
+    <ItemGroup>
+        <Content Include="..\.dockerignore">
+            <Link>.dockerignore</Link>
+        </Content>
+    </ItemGroup>
 </Project>

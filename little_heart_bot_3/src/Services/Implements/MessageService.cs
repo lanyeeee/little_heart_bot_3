@@ -6,7 +6,6 @@ using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
 using Polly;
 using Polly.Retry;
-using Serilog;
 
 namespace little_heart_bot_3.Services.Implements;
 
@@ -15,6 +14,7 @@ public class MessageService : IMessageService
     private readonly ILogger _logger;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
+    private readonly IServiceProvider _provider;
 
     private readonly ResiliencePipeline _thumbsUpPipeline;
     private readonly ResiliencePipeline _sendPipeline;
@@ -22,11 +22,13 @@ public class MessageService : IMessageService
     public MessageService(
         ILogger logger,
         JsonSerializerOptions options,
-        HttpClient httpClient)
+        HttpClient httpClient,
+        IServiceProvider provider)
     {
         _logger = logger;
         _options = options;
         _httpClient = httpClient;
+        _provider = provider;
 
         _thumbsUpPipeline = new ResiliencePipelineBuilder()
             .AddRetry(new RetryStrategyOptions
@@ -40,7 +42,7 @@ public class MessageService : IMessageService
                 OnRetry = args =>
                 {
                     var message = args.Context.Properties.GetValue(LittleHeartResilienceKeys.Message, null)!;
-                    _logger.Warning(args.Outcome.Exception,
+                    _logger.LogWarning(args.Outcome.Exception,
                         "uid {Uid} 给 {TargetName} 点赞时遇到异常，准备在 {RetryDelay} 秒后进行第 {AttemptNumber} 次重试",
                         message.Uid,
                         message.TargetName,
@@ -63,7 +65,7 @@ public class MessageService : IMessageService
                 OnRetry = args =>
                 {
                     var message = args.Context.Properties.GetValue(LittleHeartResilienceKeys.Message, null)!;
-                    _logger.Warning(args.Outcome.Exception,
+                    _logger.LogWarning(args.Outcome.Exception,
                         "uid {Uid} 给 {TargetName} 发送弹幕时遇到异常，准备在 {RetryDelay} 秒后进行第 {AttemptNumber} 次重试",
                         message.Uid,
                         message.TargetName,
@@ -108,7 +110,7 @@ public class MessageService : IMessageService
                 case Reason.CookieExpired:
                     throw;
                 case Reason.NullResponse:
-                    _logger.Error("uid {Uid} 给 {TargetName} 发送弹幕时出现 NullResponse 异常，重试多次后依然失败",
+                    _logger.LogError("uid {Uid} 给 {TargetName} 发送弹幕时出现 NullResponse 异常，重试多次后依然失败",
                         message.Uid,
                         message.TargetName);
                     ex.Reason = Reason.Ban;
@@ -117,7 +119,7 @@ public class MessageService : IMessageService
         }
         catch (HttpRequestException ex)
         {
-            _logger.Error(ex, "uid {Uid} 给 {TargetName} 发送弹幕时出现 HttpRequestException 异常，重试多次后依然失败",
+            _logger.LogError(ex, "uid {Uid} 给 {TargetName} 发送弹幕时出现 HttpRequestException 异常，重试多次后依然失败",
                 message.Uid,
                 message.TargetName);
             throw new LittleHeartException(Reason.Ban);
@@ -128,7 +130,7 @@ public class MessageService : IMessageService
         }
         catch (Exception ex)
         {
-            _logger.Fatal(ex, "uid {Uid} 给 {TargetName} 发送消息时出现预料之外的错误",
+            _logger.LogCritical(ex, "uid {Uid} 给 {TargetName} 发送消息时出现预料之外的错误",
                 message.Uid,
                 message.TargetName);
         }
@@ -174,25 +176,28 @@ public class MessageService : IMessageService
 #if DEBUG
                     Console.WriteLine($"uid {message.Uid} 给 {message.TargetName} 点赞成功");
 #endif
-                    _logger.Information("uid {Uid} 给 {TargetName} 点赞成功",
+                    _logger.LogInformation("uid {Uid} 给 {TargetName} 点赞成功",
                         message.Uid,
                         message.TargetName);
                 }
                 else if (code is -111 or -101)
                 {
-                    _logger.ForContext("Response", response.ToJsonString(_options))
-                        .Warning("uid {Uid} 给 {TargetName} 点赞失败，因为Cookie错误或已过期",
+                    _logger.LogWithResponse(
+                        () => _logger.LogWarning("uid {Uid} 给 {TargetName} 点赞失败，因为Cookie错误或已过期",
                             message.Uid,
-                            message.TargetName);
+                            message.TargetName),
+                        response.ToJsonString(_options));
+
                     throw new LittleHeartException(Reason.CookieExpired);
                 }
                 else
                 {
-                    //TODO: 以后需要记录风控的code，专门处理
-                    _logger.ForContext("Response", response.ToJsonString(_options))
-                        .Error("uid {Uid} 给 {TargetName} 点赞失败，预料之外的错误",
+                    _logger.LogWithResponse(
+                        () => _logger.LogError("uid {Uid} 给 {TargetName} 点赞失败，预料之外的错误",
                             message.Uid,
-                            message.TargetName);
+                            message.TargetName),
+                        response.ToJsonString(_options));
+
                     throw new LittleHeartException(Reason.Ban);
                 }
             }, context);
@@ -205,7 +210,7 @@ public class MessageService : IMessageService
                 case Reason.CookieExpired:
                     throw;
                 case Reason.NullResponse:
-                    _logger.Error("uid {Uid} 给 {TargetName} 点赞时出现 NullResponse 异常，重试多次后依然失败",
+                    _logger.LogError("uid {Uid} 给 {TargetName} 点赞时出现 NullResponse 异常，重试多次后依然失败",
                         message.Uid,
                         message.TargetName);
                     ex.Reason = Reason.Ban;
@@ -214,7 +219,7 @@ public class MessageService : IMessageService
         }
         catch (HttpRequestException ex)
         {
-            _logger.Error(ex,
+            _logger.LogError(ex,
                 "uid {Uid} 给 {TargetName} 点赞时出现 HttpRequestException 异常，重试多次后依然失败",
                 message.Uid,
                 message.TargetName);
@@ -226,7 +231,7 @@ public class MessageService : IMessageService
         }
         catch (Exception ex)
         {
-            _logger.Fatal(ex, "uid {Uid} 给 {TargetName} 点赞时出现预料之外的错误",
+            _logger.LogCritical(ex, "uid {Uid} 给 {TargetName} 点赞时出现预料之外的错误",
                 message.Uid,
                 message.TargetName);
         }
@@ -243,7 +248,7 @@ public class MessageService : IMessageService
     private async Task HandleSendResponseAsync(MessageModel message, JsonNode response)
     {
         //不管结果，一条弹幕只发一次
-        await using var db = new LittleHeartDbContext();
+        await using var db = _provider.GetRequiredService<LittleHeartDbContext>();
         db.Attach(message);
         message.Completed = true;
         message.Code = (int)response["code"]!;
@@ -255,74 +260,82 @@ public class MessageService : IMessageService
 #if DEBUG
             Console.WriteLine($"uid {message.Uid} 给 {message.TargetName} 发送弹幕成功");
 #endif
-            _logger.Information("uid {Uid} 给 {TargetName} 发送弹幕成功",
+            _logger.LogInformation("uid {Uid} 给 {TargetName} 发送弹幕成功",
                 message.Uid,
                 message.TargetName);
         }
         else if (message.Code == -412) //风控
         {
-            _logger.ForContext("Response", response.ToJsonString(_options))
-                .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为风控",
+            _logger.LogWithResponse(
+                () => _logger.LogWarning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为风控",
                     message.Uid,
-                    message.TargetName);
+                    message.TargetName),
+                response.ToJsonString(_options));
             throw new LittleHeartException(response.ToJsonString(_options), Reason.Ban);
         }
         else if (message.Code is -111 or -101) //Cookie过期
         {
-            _logger.ForContext("Response", response.ToJsonString(_options))
-                .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为Cookie过期",
+            _logger.LogWithResponse(
+                () => _logger.LogWarning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为Cookie过期",
                     message.Uid,
-                    message.TargetName);
+                    message.TargetName),
+                response.ToJsonString(_options));
             throw new LittleHeartException(response.ToJsonString(_options), Reason.CookieExpired);
         }
         else if (message.Code == -403) //可能是等级墙，也可能是全体禁言
         {
-            _logger.ForContext("Response", response.ToJsonString(_options))
-                .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为主播开启了禁言",
+            _logger.LogWithResponse(
+                () => _logger.LogWarning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为主播开启了禁言",
                     message.Uid,
-                    message.TargetName);
+                    message.TargetName),
+                response.ToJsonString(_options));
         }
         else if (message.Code == 11000) //似乎跟Up主的身份有关系
         {
-            _logger.ForContext("Response", response.ToJsonString(_options))
-                .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，原因未知",
+            _logger.LogWithResponse(
+                () => _logger.LogWarning("uid {Uid} 给 {TargetName} 发送弹幕失败，原因未知",
                     message.Uid,
-                    message.TargetName);
+                    message.TargetName),
+                response.ToJsonString(_options));
         }
         else if (message.Code == 10030) //发弹幕的频率过高
         {
-            _logger.ForContext("Response", response.ToJsonString(_options))
-                .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为发送弹幕的频率过高",
+            _logger.LogWithResponse(
+                () => _logger.LogWarning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为发送弹幕的频率过高",
                     message.Uid,
-                    message.TargetName);
+                    message.TargetName),
+                response.ToJsonString(_options));
         }
         else if (message.Code == 10023) //用户已将主播拉黑
         {
-            _logger.ForContext("Response", response.ToJsonString(_options))
-                .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为用户已将主播拉黑",
+            _logger.LogWithResponse(
+                () => _logger.LogWarning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为用户已将主播拉黑",
                     message.Uid,
-                    message.TargetName);
+                    message.TargetName),
+                response.ToJsonString(_options));
         }
         else if (message.Code == 1003) //用户已在本房间被禁言
         {
-            _logger.ForContext("Response", response.ToJsonString(_options))
-                .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为用户已在本房间被禁言",
+            _logger.LogWithResponse(
+                () => _logger.LogWarning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为用户已在本房间被禁言",
                     message.Uid,
-                    message.TargetName);
+                    message.TargetName), response.ToJsonString(_options));
         }
         else if (message.Code == 10024) //因主播隐私设置，暂无法发送弹幕
         {
-            _logger.ForContext("Response", response.ToJsonString(_options))
-                .Warning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为主播隐私设置，暂无法发送弹幕",
+            _logger.LogWithResponse(
+                () => _logger.LogWarning("uid {Uid} 给 {TargetName} 发送弹幕失败，因为主播隐私设置，暂无法发送弹幕",
                     message.Uid,
-                    message.TargetName);
+                    message.TargetName),
+                response.ToJsonString(_options));
         }
         else
         {
-            _logger.ForContext("Response", response.ToJsonString(_options))
-                .Error("uid {Uid} 给 {TargetName} 发送弹幕失败，预料之外的错误",
+            _logger.LogWithResponse(
+                () => _logger.LogError("uid {Uid} 给 {TargetName} 发送弹幕失败，预料之外的错误",
                     message.Uid,
-                    message.TargetName);
+                    message.TargetName),
+                response.ToJsonString(_options));
             throw new LittleHeartException(response.ToJsonString(_options), Reason.Ban);
         }
     }

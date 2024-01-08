@@ -25,21 +25,4 @@ public class LittleHeartDbContext : DbContext
         modelBuilder.ApplyConfigurationsFromAssembly(GetType().Assembly);
         base.OnModelCreating(modelBuilder);
     }
-
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-    {
-        var jsonString = File.ReadAllText("MysqlOption.json");
-        JsonNode json = JsonNode.Parse(jsonString)!;
-        var builder = new MySqlConnectionStringBuilder
-        {
-            Server = (string?)json["host"],
-            Database = (string?)json["database"],
-            UserID = (string?)json["user"],
-            Password = (string?)json["password"]
-        };
-
-        var serverVersion = ServerVersion.AutoDetect(builder.ConnectionString);
-
-        optionsBuilder.UseMySql(builder.ConnectionString, serverVersion);
-    }
 }

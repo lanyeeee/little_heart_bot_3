@@ -6,4 +6,27 @@ public static class ExtensionMethods
     {
         return value.All(char.IsNumber);
     }
+
+    public static void LogWithContext(this ILogger logger, Action logAction,
+        params KeyValuePair<string, object>[] contextDataParams)
+    {
+        var contextData = new Dictionary<string, object>();
+        foreach (var kvp in contextDataParams)
+        {
+            contextData.TryAdd(kvp.Key, kvp.Value);
+        }
+
+        using (logger.BeginScope(contextData))
+        {
+            logAction.Invoke();
+        }
+    }
+
+    public static void LogWithResponse(this ILogger logger, Action logAction, string response)
+    {
+        using (logger.BeginScope(new Dictionary<string, object> { ["Response"] = response }))
+        {
+            logAction.Invoke();
+        }
+    }
 }
