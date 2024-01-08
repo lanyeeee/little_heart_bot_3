@@ -35,6 +35,7 @@ public sealed class AppHostedService : BackgroundService
                 List<UserModel> users = await db.Users.AsNoTracking()
                     .Include(u => u.Messages)
                     .Include(u => u.Targets)
+                    .AsSplitQuery()
                     .Where(u => !u.Completed && u.CookieStatus == CookieStatus.Normal)
                     .OrderBy(u => u.Id)
                     .Take(30)
