@@ -472,8 +472,11 @@ public class TargetService : ITargetService
                         response.ToJsonString(_options));
                     throw new LittleHeartException(Reason.CookieExpired);
                 }
-
-                if (code != 0)
+                else if (code == 19002009 && response["data"]?["my_fans_medal"]?["today_feed"] is null)
+                {
+                    throw new HttpRequestException("获取粉丝勋章数据错误，请重试！");
+                }
+                else if (code != 0)
                 {
                     _logger.LogWithResponse(
                         () => _logger.LogError("uid {Uid} 查询 {TargetName} 的粉丝牌信息失败",
