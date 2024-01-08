@@ -1,7 +1,5 @@
-﻿using System.Text.Json.Nodes;
-using little_heart_bot_3.Data.Models;
+﻿using little_heart_bot_3.Data.Models;
 using Microsoft.EntityFrameworkCore;
-using MySqlConnector;
 
 namespace little_heart_bot_3.Data;
 

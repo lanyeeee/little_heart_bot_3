@@ -112,7 +112,7 @@ public class UserService : IUserService
             }
 
             //如果有任何一个任务未完成
-            if (user.Targets.Any(t => !t.Completed))
+            if (user.Targets.Exists(t => !t.Completed))
             {
                 return;
             }

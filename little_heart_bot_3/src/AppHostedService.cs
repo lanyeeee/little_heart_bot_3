@@ -65,6 +65,7 @@ public sealed class AppHostedService : BackgroundService
             }
             catch (TaskCanceledException)
             {
+                //ignore
             }
             catch (Exception ex)
             {
