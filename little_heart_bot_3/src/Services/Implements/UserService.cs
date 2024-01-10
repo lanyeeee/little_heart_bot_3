@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using little_heart_bot_3.Data;
 using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
+using Microsoft.EntityFrameworkCore;
 
 namespace little_heart_bot_3.Services.Implements;
 
@@ -15,7 +16,7 @@ public class UserService : IUserService
     private readonly ITargetService _targetService;
     private readonly HttpClient _httpClient;
     private readonly JsonSerializerOptions _options;
-    private readonly IServiceProvider _provider;
+    private readonly IDbContextFactory<LittleHeartDbContext> _factory;
 
 
     public UserService(
@@ -24,19 +25,19 @@ public class UserService : IUserService
         ITargetService targetService,
         JsonSerializerOptions options,
         HttpClient httpClient,
-        IServiceProvider provider)
+        IDbContextFactory<LittleHeartDbContext> factory)
     {
         _logger = logger;
         _messageService = messageService;
         _targetService = targetService;
         _options = options;
         _httpClient = httpClient;
-        _provider = provider;
+        _factory = factory;
     }
 
     public async Task SendMessageAsync(UserModel user, CancellationToken cancellationToken = default)
     {
-        await using var db = _provider.GetRequiredService<LittleHeartDbContext>();
+        await using var db = await _factory.CreateDbContextAsync(CancellationToken.None);
         db.Attach(user);
 
         foreach (var message in user.Messages)
@@ -70,7 +71,7 @@ public class UserService : IUserService
 
     public async Task WatchLiveAsync(UserModel user, CancellationToken cancellationToken = default)
     {
-        await using var db = _provider.GetRequiredService<LittleHeartDbContext>();
+        await using var db = await _factory.CreateDbContextAsync(CancellationToken.None);
         db.Users.Attach(user);
 
         //TODO: 改用Semaphore限制

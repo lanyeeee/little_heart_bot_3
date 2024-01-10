@@ -9,15 +9,15 @@ namespace little_heart_bot_3;
 public sealed class AppHostedService : BackgroundService
 {
     private readonly ILogger _logger;
-    private readonly IServiceProvider _provider;
     private readonly IAppService _appService;
+    private readonly IDbContextFactory<LittleHeartDbContext> _factory;
 
     public AppHostedService([FromKeyedServices("app:Logger")] ILogger logger,
         IAppService appService,
-        IServiceProvider provider)
+        IDbContextFactory<LittleHeartDbContext> factory)
     {
         _logger = logger;
-        _provider = provider;
+        _factory = factory;
         _appService = appService;
     }
 
@@ -27,7 +27,7 @@ public sealed class AppHostedService : BackgroundService
         {
             using var cancellationTokenSource = new CancellationTokenSource();
 
-            await using var db = _provider.GetRequiredService<LittleHeartDbContext>();
+            await using var db = await _factory.CreateDbContextAsync(CancellationToken.None);
             try
             {
                 await _appService.VerifyCookiesAsync(cancellationTokenSource.Token);

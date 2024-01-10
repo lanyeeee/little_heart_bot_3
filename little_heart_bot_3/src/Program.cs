@@ -15,7 +15,7 @@ using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.AddDbContext<LittleHeartDbContext>(options =>
+builder.Services.AddPooledDbContextFactory<LittleHeartDbContext>(options =>
     {
         var connectionStringBuilder = new MySqlConnectionStringBuilder
         {
@@ -28,8 +28,7 @@ builder.Services.AddDbContext<LittleHeartDbContext>(options =>
         var serverVersion = ServerVersion.AutoDetect(connectionStringBuilder.ConnectionString);
 
         options.UseMySql(connectionStringBuilder.ConnectionString, serverVersion);
-    },
-    ServiceLifetime.Transient
+    }
 );
 builder.Services.AddSingleton<HttpClient>();
 builder.Services.AddSingleton<JsonSerializerOptions>(_ => new JsonSerializerOptions

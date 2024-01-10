@@ -13,7 +13,6 @@ public class BotService : IBotService
     private readonly ILogger _logger;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
-    private readonly IServiceProvider _provider;
 
     private readonly ResiliencePipeline _getSessionListPipeline;
     private readonly ResiliencePipeline _updateSignPipeline;
@@ -24,13 +23,11 @@ public class BotService : IBotService
     public BotService(
         [FromKeyedServices("bot:Logger")] ILogger logger,
         JsonSerializerOptions options,
-        HttpClient httpClient,
-        IServiceProvider provider)
+        HttpClient httpClient)
     {
         _logger = logger;
         _options = options;
         _httpClient = httpClient;
-        _provider = provider;
 
         _getSessionListPipeline = new ResiliencePipelineBuilder()
             .AddRetry(new RetryStrategyOptions
