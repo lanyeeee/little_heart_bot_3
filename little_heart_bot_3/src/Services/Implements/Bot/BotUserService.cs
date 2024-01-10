@@ -1,4 +1,6 @@
 using System.Text.Json;
+using little_heart_bot_3.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace little_heart_bot_3.Services.Implements.Bot;
 
@@ -12,8 +14,8 @@ public class BotUserService : Implements.UserService
         ITargetService targetService,
         JsonSerializerOptions options,
         HttpClient httpClient,
-        IServiceProvider provider)
-        : base(logger, messageService, targetService, options, httpClient, provider)
+        IDbContextFactory<LittleHeartDbContext> factory)
+        : base(logger, messageService, targetService, options, httpClient, factory)
     {
     }
 }

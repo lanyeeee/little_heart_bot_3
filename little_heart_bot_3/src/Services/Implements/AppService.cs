@@ -16,7 +16,7 @@ public class AppService : IAppService
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
     private readonly IUserService _userService;
-    private readonly IServiceProvider _provider;
+    private readonly IDbContextFactory<LittleHeartDbContext> _factory;
 
     private readonly ResiliencePipeline _verifyCookiesPipeline;
 
@@ -25,13 +25,13 @@ public class AppService : IAppService
         JsonSerializerOptions options,
         HttpClient httpClient,
         [FromKeyedServices("app:UserService")] IUserService userService,
-        IServiceProvider provider)
+        IDbContextFactory<LittleHeartDbContext> factory)
     {
         _logger = logger;
         _options = options;
         _httpClient = httpClient;
         _userService = userService;
-        _provider = provider;
+        _factory = factory;
 
         _verifyCookiesPipeline = new ResiliencePipelineBuilder()
             .AddRetry(new RetryStrategyOptions
@@ -58,7 +58,7 @@ public class AppService : IAppService
 
     public async Task VerifyCookiesAsync(CancellationToken cancellationToken = default)
     {
-        await using var db = _provider.GetRequiredService<LittleHeartDbContext>();
+        await using var db = await _factory.CreateDbContextAsync(CancellationToken.None);
         List<UserModel> users = await db.Users
             .Include(u => u.Messages)
             .Include(u => u.Targets)

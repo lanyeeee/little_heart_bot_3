@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using little_heart_bot_3.Data;
 using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
+using Microsoft.EntityFrameworkCore;
 using Polly;
 using Polly.Retry;
 
@@ -14,7 +15,7 @@ public class MessageService : IMessageService
     private readonly ILogger _logger;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
-    private readonly IServiceProvider _provider;
+    private readonly IDbContextFactory<LittleHeartDbContext> _factory;
 
     private readonly ResiliencePipeline _thumbsUpPipeline;
     private readonly ResiliencePipeline _sendPipeline;
@@ -23,12 +24,12 @@ public class MessageService : IMessageService
         ILogger logger,
         JsonSerializerOptions options,
         HttpClient httpClient,
-        IServiceProvider provider)
+        IDbContextFactory<LittleHeartDbContext> factory)
     {
         _logger = logger;
         _options = options;
         _httpClient = httpClient;
-        _provider = provider;
+        _factory = factory;
 
         _thumbsUpPipeline = new ResiliencePipelineBuilder()
             .AddRetry(new RetryStrategyOptions
@@ -248,7 +249,7 @@ public class MessageService : IMessageService
     private async Task HandleSendResponseAsync(MessageModel message, JsonNode response)
     {
         //不管结果，一条弹幕只发一次
-        await using var db = _provider.GetRequiredService<LittleHeartDbContext>();
+        await using var db = await _factory.CreateDbContextAsync(CancellationToken.None);
         db.Attach(message);
         message.Completed = true;
         message.Code = (int)response["code"]!;

@@ -10,10 +10,6 @@ public class LittleHeartDbContext : DbContext
     public DbSet<MessageModel> Messages { get; set; } = null!;
     public DbSet<TargetModel> Targets { get; set; } = null!;
 
-    public LittleHeartDbContext()
-    {
-    }
-
     public LittleHeartDbContext(DbContextOptions<LittleHeartDbContext> options) : base(options)
     {
     }

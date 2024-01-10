@@ -12,8 +12,8 @@ public class BotHostedService : BackgroundService
     private readonly ILogger _logger;
     private readonly IBotService _botService;
     private readonly IUserService _userService;
-    private readonly IServiceProvider _provider;
     private LittleHeartDbContext _db = null!;
+    private readonly IDbContextFactory<LittleHeartDbContext> _factory;
 
     private bool _talking = true;
     private int _talkNum;
@@ -24,17 +24,17 @@ public class BotHostedService : BackgroundService
         [FromKeyedServices("bot:Logger")] ILogger logger,
         IBotService botService,
         [FromKeyedServices("bot:UserService")] IUserService userService,
-        IServiceProvider provider)
+        IDbContextFactory<LittleHeartDbContext> factory)
     {
         _logger = logger;
         _botService = botService;
         _userService = userService;
-        _provider = provider;
+        _factory = factory;
 
         DateTimeOffset today = DateTime.Today;
         _yesterdayMidnightTimestamp = today.ToUnixTimeSeconds();
 
-        using var db = _provider.GetRequiredService<LittleHeartDbContext>();
+        using var db = _factory.CreateDbContext();
         BotModel? botModel = db.Bots.SingleOrDefault();
         if (botModel is null)
         {
@@ -54,7 +54,7 @@ public class BotHostedService : BackgroundService
         while (!stoppingToken.IsCancellationRequested)
         {
             using var cancellationTokenSource = new CancellationTokenSource();
-            _db = _provider.GetRequiredService<LittleHeartDbContext>();
+            _db = await _factory.CreateDbContextAsync(CancellationToken.None);
             try
             {
                 Task updateSignTask = UpdateSignMain(cancellationTokenSource.Token);
@@ -124,7 +124,7 @@ public class BotHostedService : BackgroundService
             timestamp,
             _yesterdayMidnightTimestamp);
 
-        await using var db = _provider.GetRequiredService<LittleHeartDbContext>();
+        await using var db = await _factory.CreateDbContextAsync(CancellationToken.None);
 
         await foreach (var message in db.Messages)
         {

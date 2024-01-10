@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using little_heart_bot_3.Data;
 using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
+using Microsoft.EntityFrameworkCore;
 using Polly;
 using Polly.Retry;
 
@@ -14,7 +15,7 @@ public class TargetService : ITargetService
     private readonly ILogger _logger;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
-    private readonly IServiceProvider _provider;
+    private readonly IDbContextFactory<LittleHeartDbContext> _factory;
 
     private readonly ResiliencePipeline _postEPipeline;
     private readonly ResiliencePipeline _postXPipeline;
@@ -24,12 +25,12 @@ public class TargetService : ITargetService
         ILogger logger,
         JsonSerializerOptions options,
         HttpClient httpClient,
-        IServiceProvider provider)
+        IDbContextFactory<LittleHeartDbContext> factory)
     {
         _logger = logger;
         _options = options;
         _httpClient = httpClient;
-        _provider = provider;
+        _factory = factory;
 
 
         _postEPipeline = new ResiliencePipelineBuilder()
@@ -104,7 +105,7 @@ public class TargetService : ITargetService
 
     public async Task StartAsync(TargetModel target, CancellationToken cancellationToken = default)
     {
-        await using var db = _provider.GetRequiredService<LittleHeartDbContext>();
+        await using var db = await _factory.CreateDbContextAsync(CancellationToken.None);
         db.Targets.Attach(target);
 
         int? exp = await GetExpAsync(target, cancellationToken);
@@ -173,7 +174,7 @@ public class TargetService : ITargetService
     private async Task<Dictionary<string, string>?> GetEPayloadAsync(TargetModel target,
         CancellationToken cancellationToken = default)
     {
-        await using var db = _provider.GetRequiredService<LittleHeartDbContext>();
+        await using var db = await _factory.CreateDbContextAsync(CancellationToken.None);
         db.Attach(target);
 
         var uri = new Uri(
@@ -513,7 +514,7 @@ public class TargetService : ITargetService
                     throw;
                 case Reason.WithoutMedal:
                 {
-                    await using var db = _provider.GetRequiredService<LittleHeartDbContext>();
+                    await using var db = await _factory.CreateDbContextAsync(CancellationToken.None);
                     db.Remove(target);
                     await db.SaveChangesAsync(CancellationToken.None);
                     return null;
@@ -579,7 +580,7 @@ public class TargetService : ITargetService
             heartbeatData = data;
 
             interval = (int)heartbeatData["heartbeat_interval"]!;
-            await using var db = _provider.GetRequiredService<LittleHeartDbContext>();
+            await using var db = await _factory.CreateDbContextAsync(CancellationToken.None);
             db.Attach(target);
             target.WatchedSeconds += interval;
             await db.SaveChangesAsync(CancellationToken.None);
