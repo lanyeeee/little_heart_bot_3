@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using MySqlConnector;
 using Serilog;
 using Serilog.Enrichers.WithCaller;
-using Serilog.Templates;
+using Serilog.Formatting.Compact;
 using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -37,8 +37,6 @@ builder.Services.AddSingleton<JsonSerializerOptions>(_ => new JsonSerializerOpti
     Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
 });
 
-var logFormatter = new ExpressionTemplate("{ {ts:@t, template:@mt, msg:@m, level:@l, ex:@x, p:{..@p}} }\n");
-
 builder.Services.AddKeyedSingleton<ILogger>("bot:Logger", (_, _) =>
 {
     var serilog = new LoggerConfiguration()
@@ -50,7 +48,7 @@ builder.Services.AddKeyedSingleton<ILogger>("bot:Logger", (_, _) =>
             rollOnFileSizeLimit: true,
             buffered: true,
             flushToDiskInterval: TimeSpan.FromSeconds(10),
-            formatter: logFormatter)
+            formatter: new CompactJsonFormatter())
         .Enrich.WithCaller(true)
         .CreateLogger();
     return new Logger<Serilog.ILogger>(LoggerFactory.Create(loggerBuilder => loggerBuilder.AddSerilog(serilog)));
@@ -67,7 +65,7 @@ builder.Services.AddKeyedSingleton<ILogger>("app:Logger", (_, _) =>
             rollOnFileSizeLimit: true,
             buffered: true,
             flushToDiskInterval: TimeSpan.FromSeconds(1),
-            formatter: logFormatter)
+            formatter: new CompactJsonFormatter())
         .Enrich.WithCaller(true)
         .CreateLogger();
     return new Logger<Serilog.ILogger>(LoggerFactory.Create(loggerBuilder => loggerBuilder.AddSerilog(serilog)));
