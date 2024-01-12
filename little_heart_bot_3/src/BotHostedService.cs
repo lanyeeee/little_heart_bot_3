@@ -13,7 +13,7 @@ public class BotHostedService : BackgroundService
     private readonly IBotService _botService;
     private readonly IUserService _userService;
     private LittleHeartDbContext _db = null!;
-    private readonly IDbContextFactory<LittleHeartDbContext> _factory;
+    private readonly IDbContextFactory<LittleHeartDbContext> _dbContextFactory;
 
     private bool _talking = true;
     private int _talkNum;
@@ -24,17 +24,17 @@ public class BotHostedService : BackgroundService
         [FromKeyedServices("bot:Logger")] ILogger logger,
         IBotService botService,
         [FromKeyedServices("bot:UserService")] IUserService userService,
-        IDbContextFactory<LittleHeartDbContext> factory)
+        IDbContextFactory<LittleHeartDbContext> dbContextFactory)
     {
         _logger = logger;
         _botService = botService;
         _userService = userService;
-        _factory = factory;
+        _dbContextFactory = dbContextFactory;
 
         DateTimeOffset today = DateTime.Today;
         _yesterdayMidnightTimestamp = today.ToUnixTimeSeconds();
 
-        using var db = _factory.CreateDbContext();
+        using var db = _dbContextFactory.CreateDbContext();
         BotModel? botModel = db.Bots.SingleOrDefault();
         if (botModel is null)
         {
@@ -54,7 +54,7 @@ public class BotHostedService : BackgroundService
         while (!stoppingToken.IsCancellationRequested)
         {
             using var cancellationTokenSource = new CancellationTokenSource();
-            _db = await _factory.CreateDbContextAsync(CancellationToken.None);
+            _db = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
             try
             {
                 Task updateSignTask = UpdateSignMain(cancellationTokenSource.Token);
@@ -124,7 +124,7 @@ public class BotHostedService : BackgroundService
             timestamp,
             _yesterdayMidnightTimestamp);
 
-        await using var db = await _factory.CreateDbContextAsync(CancellationToken.None);
+        await using var db = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
 
         await foreach (var message in db.Messages)
         {
@@ -158,7 +158,7 @@ public class BotHostedService : BackgroundService
 
     private async Task SendMessageAsync(string content, UserModel user, CancellationToken cancellationToken = default)
     {
-        _talking = await _botService.SendMessageAsync(_botModel, content, user, cancellationToken);
+        _talking = await _botService.SendPrivateMessageAsync(_botModel, content, user, cancellationToken);
         if (!_talking)
         {
             _logger.LogWarning("今日停止发送私信，今日共发送了 {talkNum} 条私信", _talkNum);
@@ -656,7 +656,7 @@ public class BotHostedService : BackgroundService
                     ConfigNum = 0
                 };
                 IEnumerable<JsonNode?>? privateMessages =
-                    await _botService.GetMessagesAsync(_botModel, user, cancellationToken);
+                    await _botService.GetPrivateMessagesAsync(_botModel, user, cancellationToken);
 
                 await _db.AddAsync(user, CancellationToken.None);
                 await _db.SaveChangesAsync(CancellationToken.None);
@@ -669,7 +669,7 @@ public class BotHostedService : BackgroundService
             else if (timestamp > user.ReadTimestamp) //发新消息的用户
             {
                 IEnumerable<JsonNode?>? messages =
-                    await _botService.GetMessagesAsync(_botModel, user, cancellationToken);
+                    await _botService.GetPrivateMessagesAsync(_botModel, user, cancellationToken);
 
                 //只要成功获取用户的私信，无论这些私信是否成功处理，都只处理一次
                 long readTimestamp = user.ReadTimestamp;

@@ -8,12 +8,26 @@ using little_heart_bot_3.Services.Implements.App;
 using little_heart_bot_3.Services.Implements.Bot;
 using Microsoft.EntityFrameworkCore;
 using MySqlConnector;
+using Polly;
 using Serilog;
 using Serilog.Enrichers.WithCaller;
 using Serilog.Formatting.Compact;
 using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+builder.Services.AddHttpClient("global")
+    .AddTransientHttpErrorPolicy(policyBuilder => policyBuilder.WaitAndRetryAsync(
+        retryCount: 3,
+        sleepDurationProvider: retryCount => retryCount * TimeSpan.FromSeconds(1),
+        onRetry: (outcome, timespan, retryCount, context) =>
+        {
+            if (context.TryGetValue("callback", out var callbackObject) &&
+                callbackObject is Action<DelegateResult<HttpResponseMessage>, TimeSpan, int> callback)
+            {
+                callback(outcome, timespan, retryCount);
+            }
+        }));
 
 builder.Services.AddPooledDbContextFactory<LittleHeartDbContext>(options =>
     {
@@ -30,7 +44,7 @@ builder.Services.AddPooledDbContextFactory<LittleHeartDbContext>(options =>
         options.UseMySql(connectionStringBuilder.ConnectionString, serverVersion);
     }
 );
-builder.Services.AddSingleton<HttpClient>();
+
 builder.Services.AddSingleton<JsonSerializerOptions>(_ => new JsonSerializerOptions
 {
     Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping

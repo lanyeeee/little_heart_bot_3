@@ -5,8 +5,6 @@ using little_heart_bot_3.Data;
 using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
 using Microsoft.EntityFrameworkCore;
-using Polly;
-using Polly.Retry;
 
 namespace little_heart_bot_3.Services.Implements;
 
@@ -15,67 +13,18 @@ public class MessageService : IMessageService
     private readonly ILogger _logger;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
-    private readonly IDbContextFactory<LittleHeartDbContext> _factory;
+    private readonly IDbContextFactory<LittleHeartDbContext> _dbContextFactory;
 
-    private readonly ResiliencePipeline _thumbsUpPipeline;
-    private readonly ResiliencePipeline _sendPipeline;
 
-    public MessageService(
-        ILogger logger,
+    public MessageService(ILogger logger,
         JsonSerializerOptions options,
-        HttpClient httpClient,
-        IDbContextFactory<LittleHeartDbContext> factory)
+        IHttpClientFactory httpClientFactory,
+        IDbContextFactory<LittleHeartDbContext> dbContextFactory)
     {
         _logger = logger;
         _options = options;
-        _httpClient = httpClient;
-        _factory = factory;
-
-        _thumbsUpPipeline = new ResiliencePipelineBuilder()
-            .AddRetry(new RetryStrategyOptions
-            {
-                ShouldHandle = new PredicateBuilder()
-                    .Handle<LittleHeartException>(ex => ex.Reason == Reason.NullResponse)
-                    .Handle<HttpRequestException>(),
-                Delay = TimeSpan.FromSeconds(1),
-                BackoffType = DelayBackoffType.Exponential,
-                MaxRetryAttempts = 5,
-                OnRetry = args =>
-                {
-                    var message = args.Context.Properties.GetValue(LittleHeartResilienceKeys.Message, null)!;
-                    _logger.LogWarning(args.Outcome.Exception,
-                        "uid {Uid} 给 {TargetName} 点赞时遇到异常，准备在 {RetryDelay} 秒后进行第 {AttemptNumber} 次重试",
-                        message.Uid,
-                        message.TargetName,
-                        args.RetryDelay.TotalSeconds,
-                        args.AttemptNumber);
-                    return default;
-                }
-            })
-            .Build();
-
-        _sendPipeline = new ResiliencePipelineBuilder()
-            .AddRetry(new RetryStrategyOptions
-            {
-                ShouldHandle = new PredicateBuilder()
-                    .Handle<LittleHeartException>(ex => ex.Reason == Reason.NullResponse)
-                    .Handle<HttpRequestException>(),
-                Delay = TimeSpan.FromSeconds(1),
-                BackoffType = DelayBackoffType.Exponential,
-                MaxRetryAttempts = 5,
-                OnRetry = args =>
-                {
-                    var message = args.Context.Properties.GetValue(LittleHeartResilienceKeys.Message, null)!;
-                    _logger.LogWarning(args.Outcome.Exception,
-                        "uid {Uid} 给 {TargetName} 发送弹幕时遇到异常，准备在 {RetryDelay} 秒后进行第 {AttemptNumber} 次重试",
-                        message.Uid,
-                        message.TargetName,
-                        args.RetryDelay.TotalSeconds,
-                        args.AttemptNumber);
-                    return default;
-                }
-            })
-            .Build();
+        _httpClient = httpClientFactory.CreateClient("global");
+        _dbContextFactory = dbContextFactory;
     }
 
     public async Task SendAsync(MessageModel message, CancellationToken cancellationToken = default)
@@ -85,38 +34,13 @@ public class MessageService : IMessageService
             return;
         }
 
-        var context = ResilienceContextPool.Shared.Get(cancellationToken);
-        context.Properties.Set(LittleHeartResilienceKeys.Message, message);
-
         try
         {
-            await _sendPipeline.ExecuteAsync(async ctx =>
-            {
-                JsonNode? response = await PostMessageAsync(message, ctx.CancellationToken);
-                if (response is null)
-                {
-                    throw new LittleHeartException(Reason.NullResponse);
-                }
+            JsonNode response = await PostMessageAsync(message, cancellationToken);
 
-                await HandleSendResponseAsync(message, response);
+            await HandleSendResponseAsync(message, response);
 
-                await Task.Delay(3000, ctx.CancellationToken);
-            }, context);
-        }
-        catch (LittleHeartException ex)
-        {
-            switch (ex.Reason)
-            {
-                case Reason.Ban:
-                case Reason.CookieExpired:
-                    throw;
-                case Reason.NullResponse:
-                    _logger.LogError("uid {Uid} 给 {TargetName} 发送弹幕时出现 NullResponse 异常，重试多次后依然失败",
-                        message.Uid,
-                        message.TargetName);
-                    ex.Reason = Reason.Ban;
-                    throw;
-            }
+            await Task.Delay(3000, cancellationToken);
         }
         catch (HttpRequestException ex)
         {
@@ -135,10 +59,6 @@ public class MessageService : IMessageService
                 message.Uid,
                 message.TargetName);
         }
-        finally
-        {
-            ResilienceContextPool.Shared.Return(context);
-        }
     }
 
 
@@ -152,70 +72,57 @@ public class MessageService : IMessageService
             { "csrf_token", user.Csrf }
         };
 
-        var context = ResilienceContextPool.Shared.Get(cancellationToken);
-        context.Properties.Set(LittleHeartResilienceKeys.Message, message);
-
         try
         {
-            await _thumbsUpPipeline.ExecuteAsync(async ctx =>
+            HttpRequestMessage requestMessage = new HttpRequestMessage
             {
-                HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
-                {
-                    Method = HttpMethod.Post,
-                    RequestUri = new Uri("https://api.live.bilibili.com/xlive/web-ucenter/v1/interact/likeInteract"),
-                    Headers = { { "Cookie", user.Cookie } },
-                    Content = new FormUrlEncodedContent(payload)
-                }, ctx.CancellationToken);
-                JsonNode response =
-                    await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, ctx.CancellationToken) ??
-                    throw new LittleHeartException(Reason.NullResponse);
+                Method = HttpMethod.Post,
+                RequestUri = new Uri("https://api.live.bilibili.com/xlive/web-ucenter/v1/interact/likeInteract"),
+                Headers = { { "Cookie", user.Cookie } },
+                Content = new FormUrlEncodedContent(payload)
+            }.SetRetryCallback((outcome, retryDelay, retryCount) =>
+            {
+                _logger.LogWarning(outcome.Exception,
+                    "uid {Uid} 给 {TargetName} 点赞时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
+                    message.Uid,
+                    message.TargetName,
+                    retryDelay.TotalSeconds,
+                    retryCount);
+            });
 
-                int code = (int)response["code"]!;
+            HttpResponseMessage responseMessage = await _httpClient.SendAsync(requestMessage, cancellationToken);
+            var response = (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
 
-                if (code == 0)
-                {
+            int code = (int)response["code"]!;
+
+            if (code == 0)
+            {
 #if DEBUG
-                    Console.WriteLine($"uid {message.Uid} 给 {message.TargetName} 点赞成功");
+                Console.WriteLine($"uid {message.Uid} 给 {message.TargetName} 点赞成功");
 #endif
-                    _logger.LogInformation("uid {Uid} 给 {TargetName} 点赞成功",
-                        message.Uid,
-                        message.TargetName);
-                }
-                else if (code is -111 or -101)
-                {
-                    _logger.LogWithResponse(
-                        () => _logger.LogWarning("uid {Uid} 给 {TargetName} 点赞失败，因为Cookie错误或已过期",
-                            message.Uid,
-                            message.TargetName),
-                        response.ToJsonString(_options));
-
-                    throw new LittleHeartException(Reason.CookieExpired);
-                }
-                else
-                {
-                    _logger.LogWithResponse(
-                        () => _logger.LogError("uid {Uid} 给 {TargetName} 点赞失败，预料之外的错误",
-                            message.Uid,
-                            message.TargetName),
-                        response.ToJsonString(_options));
-
-                    throw new LittleHeartException(Reason.Ban);
-                }
-            }, context);
-        }
-        catch (LittleHeartException ex)
-        {
-            switch (ex.Reason)
+                _logger.LogInformation("uid {Uid} 给 {TargetName} 点赞成功",
+                    message.Uid,
+                    message.TargetName);
+            }
+            else if (code is -111 or -101)
             {
-                case Reason.Ban:
-                case Reason.CookieExpired:
-                    throw;
-                case Reason.NullResponse:
-                    _logger.LogError("uid {Uid} 给 {TargetName} 点赞时出现 NullResponse 异常，重试多次后依然失败",
+                _logger.LogWithResponse(
+                    () => _logger.LogWarning("uid {Uid} 给 {TargetName} 点赞失败，因为Cookie错误或已过期",
                         message.Uid,
-                        message.TargetName);
-                    ex.Reason = Reason.Ban;
-                    throw;
+                        message.TargetName),
+                    response.ToJsonString(_options));
+
+                throw new LittleHeartException(Reason.CookieExpired);
+            }
+            else
+            {
+                _logger.LogWithResponse(
+                    () => _logger.LogError("uid {Uid} 给 {TargetName} 点赞失败，预料之外的错误",
+                        message.Uid,
+                        message.TargetName),
+                    response.ToJsonString(_options));
+
+                throw new LittleHeartException(Reason.Ban);
             }
         }
         catch (HttpRequestException ex)
@@ -236,10 +143,6 @@ public class MessageService : IMessageService
                 message.Uid,
                 message.TargetName);
         }
-        finally
-        {
-            ResilienceContextPool.Shared.Return(context);
-        }
     }
 
     /// <exception cref="LittleHeartException">
@@ -249,7 +152,7 @@ public class MessageService : IMessageService
     private async Task HandleSendResponseAsync(MessageModel message, JsonNode response)
     {
         //不管结果，一条弹幕只发一次
-        await using var db = await _factory.CreateDbContextAsync(CancellationToken.None);
+        await using var db = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
         db.Attach(message);
         message.Completed = true;
         message.Code = (int)response["code"]!;
@@ -341,7 +244,7 @@ public class MessageService : IMessageService
         }
     }
 
-    private async Task<JsonNode?> PostMessageAsync(MessageModel message, CancellationToken cancellationToken = default)
+    private async Task<JsonNode> PostMessageAsync(MessageModel message, CancellationToken cancellationToken = default)
     {
         UserModel user = message.UserModel;
         var payload = new Dictionary<string, string?>
@@ -356,15 +259,24 @@ public class MessageService : IMessageService
             { "csrf", user.Csrf },
             { "csrf_token", user.Csrf }
         };
-
-        HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
+        var requestMessage = new HttpRequestMessage
         {
             Method = HttpMethod.Post,
             RequestUri = new Uri("https://api.live.bilibili.com/msg/send"),
             Headers = { { "Cookie", user.Cookie } },
             Content = new FormUrlEncodedContent(payload)
-        }, cancellationToken);
+        }.SetRetryCallback((outcome, retryDelay, retryCount) =>
+        {
+            _logger.LogWarning(outcome.Exception,
+                "uid {Uid} 给 {TargetName} 发送弹幕时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
+                message.Uid,
+                message.TargetName,
+                retryDelay.TotalSeconds,
+                retryCount);
+        });
 
-        return await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken);
+        HttpResponseMessage responseMessage = await _httpClient.SendAsync(requestMessage, cancellationToken);
+
+        return (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
     }
 }

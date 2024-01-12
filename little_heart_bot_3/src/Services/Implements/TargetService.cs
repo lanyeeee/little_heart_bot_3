@@ -5,8 +5,6 @@ using little_heart_bot_3.Data;
 using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
 using Microsoft.EntityFrameworkCore;
-using Polly;
-using Polly.Retry;
 
 namespace little_heart_bot_3.Services.Implements;
 
@@ -15,97 +13,23 @@ public class TargetService : ITargetService
     private readonly ILogger _logger;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
-    private readonly IDbContextFactory<LittleHeartDbContext> _factory;
+    private readonly IDbContextFactory<LittleHeartDbContext> _dbContextFactory;
 
-    private readonly ResiliencePipeline _postEPipeline;
-    private readonly ResiliencePipeline _postXPipeline;
-    private readonly ResiliencePipeline _getExpPipeline;
 
-    public TargetService(
-        ILogger logger,
+    public TargetService(ILogger logger,
         JsonSerializerOptions options,
-        HttpClient httpClient,
-        IDbContextFactory<LittleHeartDbContext> factory)
+        IHttpClientFactory httpClientFactory,
+        IDbContextFactory<LittleHeartDbContext> dbContextFactory)
     {
         _logger = logger;
         _options = options;
-        _httpClient = httpClient;
-        _factory = factory;
-
-
-        _postEPipeline = new ResiliencePipelineBuilder()
-            .AddRetry(new RetryStrategyOptions
-            {
-                ShouldHandle = new PredicateBuilder()
-                    .Handle<LittleHeartException>(ex => ex.Reason == Reason.NullResponse)
-                    .Handle<HttpRequestException>(),
-                Delay = TimeSpan.FromSeconds(1),
-                BackoffType = DelayBackoffType.Exponential,
-                MaxRetryAttempts = 5,
-                OnRetry = args =>
-                {
-                    var target = args.Context.Properties.GetValue(LittleHeartResilienceKeys.Target, null)!;
-                    _logger.LogWarning(args.Outcome.Exception,
-                        "uid {Uid} 发送E心跳包时遇到异常，准备在 {RetryDelay} 秒后进行第 {AttemptNumber} 次重试",
-                        target.Uid,
-                        args.RetryDelay.TotalSeconds,
-                        args.AttemptNumber);
-                    return default;
-                }
-            })
-            .Build();
-
-        _postXPipeline = new ResiliencePipelineBuilder()
-            .AddRetry(new RetryStrategyOptions
-            {
-                ShouldHandle = new PredicateBuilder()
-                    .Handle<LittleHeartException>(ex =>
-                        ex.Reason is Reason.NullResponse or Reason.ServerTimeout)
-                    .Handle<HttpRequestException>(),
-                Delay = TimeSpan.FromSeconds(1),
-                BackoffType = DelayBackoffType.Constant,
-                MaxRetryAttempts = 5,
-                OnRetry = args =>
-                {
-                    var target = args.Context.Properties.GetValue(LittleHeartResilienceKeys.Target, null)!;
-                    _logger.LogWarning(args.Outcome.Exception,
-                        "uid {Uid} 发送X心跳包时遇到异常，准备在 {RetryDelay} 秒后进行第 {AttemptNumber} 次重试",
-                        target.Uid,
-                        args.RetryDelay.TotalSeconds,
-                        args.AttemptNumber);
-                    return default;
-                }
-            })
-            .Build();
-
-        _getExpPipeline = new ResiliencePipelineBuilder()
-            .AddRetry(new RetryStrategyOptions
-            {
-                ShouldHandle = new PredicateBuilder()
-                    .Handle<LittleHeartException>(ex =>
-                        ex.Reason == Reason.NullResponse)
-                    .Handle<HttpRequestException>(),
-                Delay = TimeSpan.FromSeconds(1),
-                BackoffType = DelayBackoffType.Exponential,
-                MaxRetryAttempts = 5,
-                OnRetry = args =>
-                {
-                    var target = args.Context.Properties.GetValue(LittleHeartResilienceKeys.Target, null)!;
-                    _logger.LogWarning(args.Outcome.Exception,
-                        "uid {Uid} 查询 {TargetName} 粉丝牌信息时遇到异常，准备在 {RetryDelay} 秒后进行第 {AttemptNumber} 次重试",
-                        target.Uid,
-                        target.TargetName,
-                        args.RetryDelay.TotalSeconds,
-                        args.AttemptNumber);
-                    return default;
-                }
-            })
-            .Build();
+        _httpClient = httpClientFactory.CreateClient("global");
+        _dbContextFactory = dbContextFactory;
     }
 
     public async Task StartAsync(TargetModel target, CancellationToken cancellationToken = default)
     {
-        await using var db = await _factory.CreateDbContextAsync(CancellationToken.None);
+        await using var db = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
         db.Targets.Attach(target);
 
         int? exp = await GetExpAsync(target, cancellationToken);
@@ -174,19 +98,25 @@ public class TargetService : ITargetService
     private async Task<Dictionary<string, string>?> GetEPayloadAsync(TargetModel target,
         CancellationToken cancellationToken = default)
     {
-        await using var db = await _factory.CreateDbContextAsync(CancellationToken.None);
+        await using var db = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
         db.Attach(target);
 
         var uri = new Uri(
             $"https://api.live.bilibili.com/xlive/web-room/v1/index/getInfoByRoom?&room_id={target.RoomId}");
-
-        HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
+        var requestMessage = new HttpRequestMessage
         {
             Method = HttpMethod.Get,
             RequestUri = uri
-        }, cancellationToken);
-        JsonNode response = await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken) ??
-                            throw new LittleHeartException(Reason.NullResponse);
+        }.SetRetryCallback((outcome, retryDelay, retryCount) =>
+        {
+            _logger.LogWarning(outcome.Exception,
+                "获取E心跳包的payload时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
+                retryDelay.TotalSeconds,
+                retryCount);
+        });
+
+        HttpResponseMessage responseMessage = await _httpClient.SendAsync(requestMessage, cancellationToken);
+        JsonNode response = (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
 
         int code = (int)response["code"]!;
 
@@ -238,52 +168,38 @@ public class TargetService : ITargetService
         Dictionary<string, string> ePayload,
         CancellationToken cancellationToken = default)
     {
-        ResilienceContext context = ResilienceContextPool.Shared.Get(cancellationToken);
-        context.Properties.Set(LittleHeartResilienceKeys.Target, target);
-
         try
         {
-            return await _postEPipeline.ExecuteAsync(async ctx =>
+            HttpRequestMessage requestMessage = new HttpRequestMessage
             {
-                HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
-                {
-                    Method = HttpMethod.Post,
-                    RequestUri = new Uri("https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/E"),
-                    Headers = { { "Cookie", target.UserModel.Cookie } },
-                    Content = new FormUrlEncodedContent(ePayload)
-                }, ctx.CancellationToken);
-
-                JsonNode response =
-                    await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, ctx.CancellationToken) ??
-                    throw new LittleHeartException(Reason.NullResponse);
-
-                int code = (int)response["code"]!;
-                if (code != 0)
-                {
-                    _logger.LogWithResponse(
-                        () => _logger
-                            .LogError("uid {uid} 发送E心跳包失败",
-                                target.TargetUid),
-                        response.ToJsonString(_options));
-                    throw new LittleHeartException(Reason.Ban);
-                }
-
-                return response["data"]!;
-            }, context);
-        }
-        catch (LittleHeartException ex)
-        {
-            switch (ex.Reason)
+                Method = HttpMethod.Post,
+                RequestUri = new Uri("https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/E"),
+                Headers = { { "Cookie", target.UserModel.Cookie } },
+                Content = new FormUrlEncodedContent(ePayload)
+            }.SetRetryCallback((outcome, retryDelay, retryCount) =>
             {
-                case Reason.NullResponse:
-                    _logger.LogError("uid {Uid} 给 {TargetName} 发送E心跳包时出现 NullResponse 异常，且重试多次后仍然出现异常",
-                        target.Uid,
-                        target.TargetName);
-                    ex.Reason = Reason.Ban;
-                    throw;
-                default:
-                    throw;
+                _logger.LogWarning(outcome.Exception,
+                    "uid {Uid} 发送E心跳包时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
+                    target.Uid,
+                    retryDelay.TotalSeconds,
+                    retryCount);
+            });
+
+            HttpResponseMessage responseMessage = await _httpClient.SendAsync(requestMessage, cancellationToken);
+            var response = (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
+
+            int code = (int)response["code"]!;
+            if (code != 0)
+            {
+                _logger.LogWithResponse(
+                    () => _logger
+                        .LogError("uid {uid} 发送E心跳包失败",
+                            target.TargetUid),
+                    response.ToJsonString(_options));
+                throw new LittleHeartException(Reason.Ban);
             }
+
+            return response["data"]!;
         }
         catch (HttpRequestException ex)
         {
@@ -304,10 +220,6 @@ public class TargetService : ITargetService
                 target.TargetName);
             return null;
         }
-        finally
-        {
-            ResilienceContextPool.Shared.Return(context);
-        }
     }
 
     private async Task<JsonNode?> PostXAsync(
@@ -315,99 +227,81 @@ public class TargetService : ITargetService
         Dictionary<string, string> payload,
         CancellationToken cancellationToken = default)
     {
-        var context = ResilienceContextPool.Shared.Get(cancellationToken);
-        context.Properties.Set(LittleHeartResilienceKeys.Target, target);
         try
         {
-            return await _postXPipeline.ExecuteAsync(async ctx =>
+            HttpRequestMessage requestMessage = new HttpRequestMessage
             {
-                HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
-                {
-                    Method = HttpMethod.Post,
-                    RequestUri = new Uri("https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/X"),
-                    Headers = { { "Cookie", target.UserModel.Cookie } },
-                    Content = new FormUrlEncodedContent(payload)
-                }, ctx.CancellationToken);
-                JsonNode response =
-                    await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, ctx.CancellationToken) ??
-                    throw new LittleHeartException(Reason.NullResponse);
-
-                int code = (int)response["code"]!;
-                if (code == -504)
-                {
-                    _logger.LogWithResponse(
-                        () => _logger.LogWarning("uid {Uid} 给 {TargetName} 发送X心跳包失败，服务器调用超时",
-                            target.Uid,
-                            target.TargetName),
-                        response.ToJsonString(_options));
-                    throw new LittleHeartException(Reason.ServerTimeout);
-                }
-                else if (code == 1012001)
-                {
-                    //签名错误，心跳包加密失败
-                    Console.WriteLine(payload["s"]);
-                    _logger.LogWithResponse(
-                        () => _logger.LogError("uid {Uid} 给 {TargetName} 发送X心跳包失败，因为签名错误，心跳包加密失败",
-                            target.TargetUid,
-                            target.TargetName),
-                        response.ToJsonString(_options));
-                    return null;
-                }
-                else if (code == 1012002)
-                {
-                    //没有按照规定的时间间隔发送心跳包
-                    _logger.LogWithResponse(
-                        () => _logger.LogWarning(
-                            "uid {Uid} 给 {TargetName} 发送X心跳包失败，因为没有按照规定的时间间隔发送心跳包",
-                            target.TargetUid,
-                            target.TargetName),
-                        response.ToJsonString(_options));
-                    return null;
-                }
-                else if (code == 1012003)
-                {
-                    //心跳包时间戳错误
-                    _logger.LogWithResponse(
-                        () => _logger.LogWarning("uid {Uid} 给 {TargetName} 发送X心跳包失败，时间戳错误",
-                            target.Uid,
-                            target.TargetName),
-                        response.ToJsonString(_options));
-                    return null;
-                }
-
-
-                if (code != 0)
-                {
-                    _logger.LogWithResponse(
-                        () => _logger.LogError("uid {Uid} 给 {TargetName} 发送X心跳包失败",
-                            target.TargetUid,
-                            target.TargetName),
-                        response.ToJsonString(_options));
-                    throw new LittleHeartException(Reason.Ban);
-                }
-
-                return response["data"];
-            }, context);
-        }
-        catch (LittleHeartException ex)
-        {
-            switch (ex.Reason)
+                Method = HttpMethod.Post,
+                RequestUri = new Uri("https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/X"),
+                Headers = { { "Cookie", target.UserModel.Cookie } },
+                Content = new FormUrlEncodedContent(payload)
+            }.SetRetryCallback((outcome, retryDelay, retryCount) =>
             {
-                case Reason.NullResponse:
-                    _logger.LogError("uid {Uid} 给 {TargetName} 发送X心跳包时出现 NullResponse 异常，且重试多次后仍然出现异常",
+                _logger.LogWarning(outcome.Exception,
+                    "uid {Uid} 发送X心跳包时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
+                    target.Uid,
+                    retryDelay.TotalSeconds,
+                    retryCount);
+            });
+
+            HttpResponseMessage responseMessage = await _httpClient.SendAsync(requestMessage, cancellationToken);
+            var response = (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
+
+            int code = (int)response["code"]!;
+            if (code == -504)
+            {
+                _logger.LogWithResponse(
+                    () => _logger.LogWarning("uid {Uid} 给 {TargetName} 发送X心跳包失败，服务器调用超时",
                         target.Uid,
-                        target.TargetName);
-                    ex.Reason = Reason.Ban;
-                    throw;
-                case Reason.ServerTimeout:
-                    _logger.LogError("uid {Uid} 给 {TargetName} 发送X心跳包时出现 ServerTimeout 异常，且重试多次后仍然出现异常",
-                        target.Uid,
-                        target.TargetName);
-                    ex.Reason = Reason.Ban;
-                    throw;
-                default:
-                    throw;
+                        target.TargetName),
+                    response.ToJsonString(_options));
+                throw new HttpRequestException(response["message"]!.ToString());
             }
+            else if (code == 1012001)
+            {
+                //签名错误，心跳包加密失败
+                Console.WriteLine(payload["s"]);
+                _logger.LogWithResponse(
+                    () => _logger.LogError("uid {Uid} 给 {TargetName} 发送X心跳包失败，因为签名错误，心跳包加密失败",
+                        target.TargetUid,
+                        target.TargetName),
+                    response.ToJsonString(_options));
+                return null;
+            }
+            else if (code == 1012002)
+            {
+                //没有按照规定的时间间隔发送心跳包
+                _logger.LogWithResponse(
+                    () => _logger.LogWarning(
+                        "uid {Uid} 给 {TargetName} 发送X心跳包失败，因为没有按照规定的时间间隔发送心跳包",
+                        target.TargetUid,
+                        target.TargetName),
+                    response.ToJsonString(_options));
+                return null;
+            }
+            else if (code == 1012003)
+            {
+                //心跳包时间戳错误
+                _logger.LogWithResponse(
+                    () => _logger.LogWarning("uid {Uid} 给 {TargetName} 发送X心跳包失败，时间戳错误",
+                        target.Uid,
+                        target.TargetName),
+                    response.ToJsonString(_options));
+                return null;
+            }
+
+
+            if (code != 0)
+            {
+                _logger.LogWithResponse(
+                    () => _logger.LogError("uid {Uid} 给 {TargetName} 发送X心跳包失败",
+                        target.TargetUid,
+                        target.TargetName),
+                    response.ToJsonString(_options));
+                throw new LittleHeartException(Reason.Ban);
+            }
+
+            return response["data"];
         }
         catch (HttpRequestException ex)
         {
@@ -435,10 +329,6 @@ public class TargetService : ITargetService
                 target.TargetName);
             return null;
         }
-        finally
-        {
-            ResilienceContextPool.Shared.Return(context);
-        }
     }
 
     private async Task<int?> GetExpAsync(TargetModel target, CancellationToken cancellationToken = default)
@@ -446,84 +336,77 @@ public class TargetService : ITargetService
         var uri = new Uri(
             $"https://api.live.bilibili.com/xlive/app-ucenter/v1/fansMedal/fans_medal_info?target_id={target.TargetUid}");
 
-        var context = ResilienceContextPool.Shared.Get(cancellationToken);
-        context.Properties.Set(LittleHeartResilienceKeys.Target, target);
         try
         {
-            return await _getExpPipeline.ExecuteAsync(async ctx =>
+            var requestMessage = new HttpRequestMessage
             {
-                HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
-                {
-                    Method = HttpMethod.Get,
-                    RequestUri = uri,
-                    Headers = { { "cookie", target.UserModel.Cookie } }
-                }, ctx.CancellationToken);
+                Method = HttpMethod.Get,
+                RequestUri = uri,
+                Headers = { { "cookie", target.UserModel.Cookie } }
+            }.SetRetryCallback((outcome, retryDelay, retryCount) =>
+            {
+                _logger.LogWarning(outcome.Exception,
+                    "uid {Uid} 获取 {TargetName} 粉丝牌经验时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
+                    target.Uid,
+                    target.TargetName,
+                    retryDelay.TotalSeconds,
+                    retryCount);
+            });
 
-                JsonNode response =
-                    await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, ctx.CancellationToken) ??
-                    throw new LittleHeartException(Reason.NullResponse);
+            HttpResponseMessage responseMessage = await _httpClient.SendAsync(requestMessage, cancellationToken);
+            var response = (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
 
-                int code = (int)response["code"]!;
-                if (code == -101)
-                {
-                    _logger.LogWithResponse(
-                        () => _logger.LogWarning("uid {Uid} 的cookie已过期",
-                            target.Uid),
-                        response.ToJsonString(_options));
-                    throw new LittleHeartException(Reason.CookieExpired);
-                }
-                else if (code == 19002009 && response["data"]?["my_fans_medal"]?["today_feed"] is null)
-                {
-                    throw new HttpRequestException("获取粉丝勋章数据错误，请重试！");
-                }
-                else if (code != 0)
-                {
-                    _logger.LogWithResponse(
-                        () => _logger.LogError("uid {Uid} 查询 {TargetName} 的粉丝牌信息失败",
-                            target.Uid,
-                            target.TargetName),
-                        response.ToJsonString(_options));
-                    throw new LittleHeartException(Reason.Ban);
-                }
+            int code = (int)response["code"]!;
+            if (code == -101)
+            {
+                _logger.LogWithResponse(
+                    () => _logger.LogWarning("uid {Uid} 的cookie已过期",
+                        target.Uid),
+                    response.ToJsonString(_options));
+                throw new LittleHeartException(Reason.CookieExpired);
+            }
+            else if (code == 19002009 && response["data"]?["my_fans_medal"]?["today_feed"] is null)
+            {
+                throw new HttpRequestException("获取粉丝勋章数据错误，请重试！");
+            }
+            else if (code != 0)
+            {
+                _logger.LogWithResponse(
+                    () => _logger.LogError("uid {Uid} 查询 {TargetName} 的粉丝牌信息失败",
+                        target.Uid,
+                        target.TargetName),
+                    response.ToJsonString(_options));
+                throw new LittleHeartException(Reason.Ban);
+            }
 
-                bool hasMedal = (bool)response["data"]!["has_fans_medal"]!;
-                if (!hasMedal)
-                {
-                    _logger.LogWithResponse(
-                        () => _logger.LogWarning("uid {uid} 未持有 {TargetName} 的粉丝牌",
-                            target.Uid,
-                            target.TargetName),
-                        response.ToJsonString(_options));
-                    throw new LittleHeartException(Reason.WithoutMedal);
-                }
+            bool hasMedal = (bool)response["data"]!["has_fans_medal"]!;
+            if (!hasMedal)
+            {
+                _logger.LogWithResponse(
+                    () => _logger.LogWarning("uid {uid} 未持有 {TargetName} 的粉丝牌",
+                        target.Uid,
+                        target.TargetName),
+                    response.ToJsonString(_options));
+                throw new LittleHeartException(Reason.WithoutMedal);
+            }
 
-                int? exp = (int?)response["data"]!["my_fans_medal"]!["today_feed"];
+            int? exp = (int?)response["data"]!["my_fans_medal"]!["today_feed"];
 
-                return exp;
-            }, context);
+            return exp;
         }
         catch (LittleHeartException ex)
         {
             switch (ex.Reason)
             {
-                case Reason.Ban:
-                case Reason.CookieExpired:
-                    throw;
-                case Reason.NullResponse:
-                    _logger.LogError("uid {Uid} 查询 {TargetName} 的粉丝牌信息时出现 NullResponse 异常，且重试多次后仍然出现异常",
-                        target.Uid,
-                        target.TargetName);
-                    ex.Reason = Reason.Ban;
-                    throw;
                 case Reason.WithoutMedal:
                 {
-                    await using var db = await _factory.CreateDbContextAsync(CancellationToken.None);
+                    await using var db = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
                     db.Remove(target);
                     await db.SaveChangesAsync(CancellationToken.None);
                     return null;
                 }
                 default:
-                    return null;
+                    throw;
             }
         }
         catch (HttpRequestException ex)
@@ -544,10 +427,6 @@ public class TargetService : ITargetService
                 target.TargetUid,
                 target.TargetName);
             return null;
-        }
-        finally
-        {
-            ResilienceContextPool.Shared.Return(context);
         }
     }
 
@@ -583,7 +462,7 @@ public class TargetService : ITargetService
             heartbeatData = data;
 
             interval = (int)heartbeatData["heartbeat_interval"]!;
-            await using var db = await _factory.CreateDbContextAsync(CancellationToken.None);
+            await using var db = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
             db.Attach(target);
             target.WatchedSeconds += interval;
             await db.SaveChangesAsync(CancellationToken.None);
