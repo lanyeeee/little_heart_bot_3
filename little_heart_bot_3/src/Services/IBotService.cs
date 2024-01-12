@@ -21,7 +21,7 @@ public interface IBotService
     /// <param name="user"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    public Task<IEnumerable<JsonNode?>?> GetMessagesAsync(BotModel bot, UserModel user,
+    public Task<IEnumerable<JsonNode?>?> GetPrivateMessagesAsync(BotModel bot, UserModel user,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -40,6 +40,6 @@ public interface IBotService
     /// <param name="user"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    public Task<bool> SendMessageAsync(BotModel bot, string content, UserModel user,
+    public Task<bool> SendPrivateMessageAsync(BotModel bot, string content, UserModel user,
         CancellationToken cancellationToken = default);
 }

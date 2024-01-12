@@ -9,9 +9,9 @@ public class BotTargetService : Implements.TargetService
     public BotTargetService(
         [FromKeyedServices("bot:Logger")] ILogger logger,
         JsonSerializerOptions options,
-        HttpClient httpClient,
-        IDbContextFactory<LittleHeartDbContext> factory)
-        : base(logger, options, httpClient, factory)
+        IHttpClientFactory httpClientFactory,
+        IDbContextFactory<LittleHeartDbContext> dbContextFactory)
+        : base(logger, options, httpClientFactory, dbContextFactory)
     {
     }
 }

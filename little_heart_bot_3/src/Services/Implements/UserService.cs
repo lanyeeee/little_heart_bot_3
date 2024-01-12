@@ -16,28 +16,27 @@ public class UserService : IUserService
     private readonly ITargetService _targetService;
     private readonly HttpClient _httpClient;
     private readonly JsonSerializerOptions _options;
-    private readonly IDbContextFactory<LittleHeartDbContext> _factory;
+    private readonly IDbContextFactory<LittleHeartDbContext> _dbContextFactory;
 
 
-    public UserService(
-        ILogger logger,
+    public UserService(ILogger logger,
         IMessageService messageService,
         ITargetService targetService,
         JsonSerializerOptions options,
-        HttpClient httpClient,
-        IDbContextFactory<LittleHeartDbContext> factory)
+        IHttpClientFactory httpClientFactory,
+        IDbContextFactory<LittleHeartDbContext> dbContextFactory)
     {
         _logger = logger;
         _messageService = messageService;
         _targetService = targetService;
         _options = options;
-        _httpClient = httpClient;
-        _factory = factory;
+        _httpClient = httpClientFactory.CreateClient("global");
+        _dbContextFactory = dbContextFactory;
     }
 
     public async Task SendMessageAsync(UserModel user, CancellationToken cancellationToken = default)
     {
-        await using var db = await _factory.CreateDbContextAsync(CancellationToken.None);
+        await using var db = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
         db.Attach(user);
 
         foreach (var message in user.Messages)
@@ -71,7 +70,7 @@ public class UserService : IUserService
 
     public async Task WatchLiveAsync(UserModel user, CancellationToken cancellationToken = default)
     {
-        await using var db = await _factory.CreateDbContextAsync(CancellationToken.None);
+        await using var db = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
         db.Users.Attach(user);
 
         //TODO: 改用Semaphore限制
@@ -146,7 +145,8 @@ public class UserService : IUserService
         var parameters = new Dictionary<string, string> { { "mid", uid.ToString() } };
         string queryString = await Wbi.GetWbiQueryStringAsync(_httpClient, parameters, cancellationToken);
 
-        HttpResponseMessage responseMessage = await _httpClient.SendAsync(new HttpRequestMessage
+
+        var requestMessage = new HttpRequestMessage
         {
             Method = HttpMethod.Get,
             RequestUri = new Uri($"https://api.bilibili.com/x/space/wbi/acc/info?{queryString}"),
@@ -158,12 +158,19 @@ public class UserService : IUserService
                 },
                 { "cookie", user.Cookie }
             },
-        }, cancellationToken);
-        await Task.Delay(1000, cancellationToken);
+        }.SetRetryCallback((outcome, retryDelay, retryCount) =>
+        {
+            _logger.LogWarning(outcome.Exception,
+                "uid {Uid} 获取 {TargetUid} 的信息时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
+                user.Uid,
+                uid,
+                retryDelay.TotalSeconds,
+                retryCount);
+        });
 
-        JsonNode response =
-            await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken) ??
-            throw new LittleHeartException(Reason.NullResponse);
+        HttpResponseMessage responseMessage = await _httpClient.SendAsync(requestMessage, cancellationToken);
+        await Task.Delay(1000, cancellationToken);
+        var response = (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
 
         int code = (int)response["code"]!;
 

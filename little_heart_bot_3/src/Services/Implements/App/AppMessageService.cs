@@ -9,9 +9,9 @@ public class AppMessageService : Implements.MessageService
     public AppMessageService(
         [FromKeyedServices("app:Logger")] ILogger logger,
         JsonSerializerOptions options,
-        HttpClient httpClient,
-        IDbContextFactory<LittleHeartDbContext> factory)
-        : base(logger, options, httpClient, factory)
+        IHttpClientFactory httpClientFactory,
+        IDbContextFactory<LittleHeartDbContext> dbContextFactory)
+        : base(logger, options, httpClientFactory, dbContextFactory)
     {
     }
 }

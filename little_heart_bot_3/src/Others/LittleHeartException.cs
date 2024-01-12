@@ -12,10 +12,8 @@ public class LittleHeartException : Exception
         : base(reason switch
         {
             Reason.Ban => "Ban",
-            Reason.NullResponse => "NullResponse",
             Reason.CookieExpired => "CookieExpired",
             Reason.WithoutMedal => "WithoutMedal",
-            Reason.ServerTimeout => "ServerTimeout",
             _ => "Null"
         })
     {
@@ -41,8 +39,6 @@ public class LittleHeartException : Exception
 public enum Reason
 {
     Ban,
-    NullResponse,
     CookieExpired,
-    WithoutMedal,
-    ServerTimeout
+    WithoutMedal
 }

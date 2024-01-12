@@ -13,9 +13,9 @@ public class AppUserService : Implements.UserService
         [FromKeyedServices("app:TargetService")]
         ITargetService targetService,
         JsonSerializerOptions options,
-        HttpClient httpClient,
-        IDbContextFactory<LittleHeartDbContext> factory)
-        : base(logger, messageService, targetService, options, httpClient, factory)
+        IHttpClientFactory httpClientFactory,
+        IDbContextFactory<LittleHeartDbContext> dbContextFactory)
+        : base(logger, messageService, targetService, options, httpClientFactory, dbContextFactory)
     {
     }
 }

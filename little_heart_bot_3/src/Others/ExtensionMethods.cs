@@ -1,3 +1,7 @@
+using JetBrains.Annotations;
+using Polly;
+using Serilog.Core;
+
 namespace little_heart_bot_3.Others;
 
 public static class ExtensionMethods
@@ -28,5 +32,15 @@ public static class ExtensionMethods
         {
             logAction.Invoke();
         }
+    }
+
+    public static HttpRequestMessage SetRetryCallback(this HttpRequestMessage request,
+        Action<DelegateResult<HttpResponseMessage>, TimeSpan, int> callback)
+    {
+        request.SetPolicyExecutionContext(new Context
+        {
+            ["callback"] = callback
+        });
+        return request;
     }
 }
