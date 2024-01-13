@@ -36,10 +36,29 @@ public interface IBotService
     /// bot向user发送私信，内容为content
     /// </summary>
     /// <param name="bot"></param>
-    /// <param name="content"></param>
     /// <param name="user"></param>
+    /// <param name="content"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    public Task<bool> SendPrivateMessageAsync(BotModel bot, string content, UserModel user,
+    public Task<bool> SendPrivateMessageAsync(
+        BotModel bot,
+        UserModel user,
+        string content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 处理收到的命令
+    /// </summary>
+    /// <param name="bot"></param>
+    /// <param name="user"></param>
+    /// <param name="command"></param>
+    /// <param name="parameter"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    public Task HandleCommandAsync(
+        BotModel bot,
+        UserModel user,
+        string command,
+        string? parameter,
         CancellationToken cancellationToken = default);
 }

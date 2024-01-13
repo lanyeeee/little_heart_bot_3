@@ -11,13 +11,16 @@ public class BotService : IBotService
     private readonly ILogger _logger;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
+    private readonly IUserService _userService;
 
     public BotService([FromKeyedServices("bot:Logger")] ILogger logger,
         JsonSerializerOptions options,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory,
+        [FromKeyedServices("bot:UserService")] IUserService userService)
     {
         _logger = logger;
         _options = options;
+        _userService = userService;
         _httpClient = httpClientFactory.CreateClient("global");
     }
 
@@ -185,7 +188,9 @@ public class BotService : IBotService
         }
     }
 
-    public async Task<bool> SendPrivateMessageAsync(BotModel bot, string content, UserModel user,
+    public async Task<bool> SendPrivateMessageAsync(BotModel bot,
+        UserModel user,
+        string content,
         CancellationToken cancellationToken = default)
     {
         try
@@ -235,6 +240,8 @@ public class BotService : IBotService
                 return false;
             }
 
+            user.ConfigTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds();
+            user.ConfigNum++;
             return true;
         }
         catch (HttpRequestException ex)
@@ -258,6 +265,44 @@ public class BotService : IBotService
         }
     }
 
+    public async Task HandleCommandAsync(
+        BotModel bot,
+        UserModel user,
+        string command,
+        string? parameter,
+        CancellationToken cancellationToken = default)
+    {
+        switch (command)
+        {
+            case "/target_set" when parameter is not null:
+                await HandleTargetSetCommandAsync(user, parameter, cancellationToken);
+                break;
+            case "/target_delete" when parameter is not null:
+                HandleTargetDeleteCommand(user, parameter);
+                break;
+            case "/message_set" when parameter is not null:
+                await HandleMessageSetCommandAsync(user, parameter, cancellationToken);
+                break;
+            case "/message_delete" when parameter is not null:
+                HandleMessageDeleteCommand(user, parameter);
+                break;
+            case "/cookie_commit" when parameter is not null:
+                HandleCookieCommitCommand(user, parameter);
+                break;
+            case "/config_all":
+                await HandleConfigAllCommandAsync(bot, user, cancellationToken);
+                break;
+            case "/message_config":
+                await HandleMessageConfigCommandAsync(bot, user, parameter, cancellationToken);
+                break;
+            case "/target_config":
+                await HandleTargetConfigCommandAsync(bot, user, parameter, cancellationToken);
+                break;
+            case "/delete":
+                HandleDeleteCommand(user);
+                break;
+        }
+    }
 
     private bool ShouldUpdateSign(BotModel bot)
     {
@@ -312,7 +357,8 @@ public class BotService : IBotService
         return sign;
     }
 
-    private async Task<JsonArray?> GetNormalSessionListAsync(BotModel bot,
+    private async Task<JsonArray?> GetNormalSessionListAsync(
+        BotModel bot,
         CancellationToken cancellationToken = default)
     {
         //普通的私信session
@@ -348,7 +394,8 @@ public class BotService : IBotService
         return sessionList;
     }
 
-    private async Task<JsonArray?> GetBlockedSessionListAsync(BotModel bot,
+    private async Task<JsonArray?> GetBlockedSessionListAsync(
+        BotModel bot,
         CancellationToken cancellationToken = default)
     {
         //被屏蔽的私信session
@@ -382,4 +429,347 @@ public class BotService : IBotService
         var blockedList = (JsonArray?)response["data"]!["session_list"];
         return blockedList;
     }
+
+    #region CommandHandler
+
+    private async Task HandleTargetSetCommandAsync(
+        UserModel user,
+        string parameter,
+        CancellationToken cancellationToken = default)
+    {
+        bool parameterIsUid = long.TryParse(parameter, out var targetUid);
+        if (!parameterIsUid || user.Targets.Count > 50)
+        {
+            return;
+        }
+
+        JsonNode? data = await _userService.GetOtherUserInfoAsync(user, targetUid, cancellationToken);
+        if (data is null)
+        {
+            return;
+        }
+
+        string targetName = (string)data["name"]!;
+        long roomId = (long)data["live_room"]!["roomid"]!;
+        TargetModel? target = user.Targets.Find(t => t.TargetUid == targetUid);
+
+        if (target is not null)
+        {
+            target.TargetName = targetName;
+            target.RoomId = roomId;
+            target.Completed = false;
+        }
+        else
+        {
+            target = new TargetModel()
+            {
+                Uid = user.Uid,
+                Completed = false,
+                RoomId = roomId,
+                TargetName = targetName,
+                TargetUid = targetUid
+            };
+            user.Targets.Add(target);
+
+            var message = user.Messages.Find(m => m.TargetUid == targetUid);
+
+            if (message is not null)
+            {
+                message.Completed = false;
+            }
+            else
+            {
+                message = new MessageModel()
+                {
+                    Uid = user.Uid,
+                    TargetName = targetName,
+                    TargetUid = targetUid,
+                    RoomId = roomId,
+                    Code = 0,
+                    Content = Globals.DefaultMessageContent,
+                    Completed = false
+                };
+                user.Messages.Add(message);
+            }
+        }
+
+        user.Completed = false;
+    }
+
+    private void HandleTargetDeleteCommand(UserModel user, string parameter)
+    {
+        if (parameter == "all")
+        {
+            user.Targets.Clear();
+            return;
+        }
+
+        if (!long.TryParse(parameter, out var targetUid))
+        {
+            return;
+        }
+
+        TargetModel? target = user.Targets.Find(t => t.TargetUid == targetUid);
+        if (target is not null)
+        {
+            user.Targets.Remove(target);
+        }
+    }
+
+    private async Task HandleMessageSetCommandAsync(
+        UserModel user,
+        string parameter,
+        CancellationToken cancellationToken = default)
+    {
+        string[] pair = parameter.Split(" ", 2);
+        if (pair.Length != 2)
+        {
+            return;
+        }
+
+        string targetUidString = pair[0].Trim();
+        bool targetUidStringIsUid = long.TryParse(targetUidString, out var targetUid);
+        string content = pair[1].Trim();
+        int messageCount = user.Messages.Count;
+        if (!targetUidStringIsUid || content.Length > 20 || messageCount > 50)
+        {
+            return;
+        }
+
+        MessageModel? message = user.Messages.Find(m => m.TargetUid == targetUid);
+        if (message is not null)
+        {
+            message.Content = content;
+            message.Completed = false;
+            message.Code = 0;
+            message.Response = null;
+        }
+        else
+        {
+            JsonNode? data = await _userService.GetOtherUserInfoAsync(user, targetUid, cancellationToken);
+            if (data is null)
+            {
+                return;
+            }
+
+            string targetName = (string)data["name"]!;
+            long roomId = (long)data["live_room"]!["roomid"]!;
+
+            message = new MessageModel
+            {
+                Uid = user.Uid,
+                TargetUid = targetUid,
+                TargetName = targetName,
+                RoomId = roomId,
+                Content = content,
+                Code = 0
+            };
+            user.Messages.Add(message);
+        }
+    }
+
+    private void HandleMessageDeleteCommand(UserModel user, string parameter)
+    {
+        if (parameter == "all")
+        {
+            //删掉所有没有对应target的message
+            user.Messages.RemoveAll(m => !user.Targets.Exists(t => t.TargetUid == m.TargetUid));
+
+            //剩下的message只需要把内容重置就行了
+            foreach (var msg in user.Messages)
+            {
+                msg.Content = Globals.DefaultMessageContent;
+                msg.Code = 0;
+                msg.Response = null;
+            }
+
+            return;
+        }
+
+        if (!long.TryParse(parameter, out var targetUid))
+        {
+            return;
+        }
+
+        MessageModel? message = user.Messages.Find(m => m.TargetUid == targetUid);
+        if (message is null)
+        {
+            return;
+        }
+
+        TargetModel? target = user.Targets.Find(t => t.TargetUid == targetUid);
+        if (target is not null)
+        {
+            message.Content = Globals.DefaultMessageContent;
+            message.Code = 0;
+            message.Response = null;
+        }
+        else
+        {
+            user.Messages.Remove(message);
+        }
+    }
+
+    private void HandleCookieCommitCommand(UserModel user, string parameter)
+    {
+        try
+        {
+            user.Cookie = parameter.Replace("\n", "");
+            user.Csrf = Globals.GetCsrf(user.Cookie);
+            user.CookieStatus = 0;
+        }
+        catch (Exception ex)
+        {
+#if DEBUG
+            Console.WriteLine(ex);
+#endif
+            _logger.LogError(ex, "uid {uid} 提交的cookie有误", user.Uid);
+        }
+    }
+
+    private async Task HandleConfigAllCommandAsync(
+        BotModel bot,
+        UserModel user,
+        CancellationToken cancellationToken = default)
+    {
+        string? content = _userService.GetConfigAllString(user);
+        if (content is null)
+        {
+            return;
+        }
+
+        await SendPrivateMessageAsync(bot, user, content, cancellationToken);
+    }
+
+    private async Task HandleMessageConfigCommandAsync(
+        BotModel bot,
+        UserModel user,
+        string? parameter,
+        CancellationToken cancellationToken = default)
+    {
+        if (parameter == "all")
+        {
+            List<string>? contents = _userService.GetAllMessageConfigStringSplit(user);
+            if (contents is null)
+            {
+                return;
+            }
+
+            foreach (string message in contents)
+            {
+                string content = message + $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
+                await SendPrivateMessageAsync(bot, user, content, cancellationToken);
+                await Task.Delay(1000, cancellationToken);
+            }
+
+            return;
+        }
+
+        if (long.TryParse(parameter, out var targetUid))
+        {
+            MessageModel? message = user.Messages.Find(m => m.TargetUid == targetUid);
+            if (message is null)
+            {
+                return;
+            }
+
+            string? content = _userService.GetSpecifyMessageConfigString(message);
+            if (content is null)
+            {
+                return;
+            }
+
+            content += $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
+            await SendPrivateMessageAsync(bot, user, content, cancellationToken);
+        }
+        else
+        {
+            string? content = _userService.GetAllMessageConfigString(user);
+            if (content is null)
+            {
+                return;
+            }
+
+            if (content.Length > 450)
+            {
+                content =
+                    "设置的弹幕过多，配置信息长度大于500，超过了私信长度的上限，无法发送\n\n请尝试使用\n/message_config 目标uid\n进行单个查询\n\n或者使用/message_config all\n获取分段的完整配置信息(每段消耗一次查询次数)";
+            }
+
+            content += $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
+            await SendPrivateMessageAsync(bot, user, content, cancellationToken);
+        }
+    }
+
+    private async Task HandleTargetConfigCommandAsync(
+        BotModel bot,
+        UserModel user,
+        string? parameter,
+        CancellationToken cancellationToken = default)
+    {
+        if (parameter == "all")
+        {
+            List<string>? contents = _userService.GetAllTargetConfigStringSplit(user);
+            if (contents is null)
+            {
+                return;
+            }
+
+            foreach (string message in contents)
+            {
+                string content = message + $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
+                await SendPrivateMessageAsync(bot, user, content, cancellationToken);
+                await Task.Delay(1000, cancellationToken);
+            }
+
+            return;
+        }
+
+        if (long.TryParse(parameter, out var targetUid))
+        {
+            TargetModel? target = user.Targets.Find(t => t.TargetUid == targetUid);
+            if (target is null)
+            {
+                return;
+            }
+
+            string? content = _userService.GetSpecifyTargetConfigString(target);
+            if (content is null)
+            {
+                return;
+            }
+
+            content += $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
+            await SendPrivateMessageAsync(bot, user, content, cancellationToken);
+        }
+        else
+        {
+            string? content = _userService.GetAllTargetConfigString(user);
+            if (content is null)
+            {
+                return;
+            }
+
+            if (content.Length > 450)
+            {
+                content =
+                    "设置的目标过多，配置信息长度大于500，超过了私信长度的上限，无法发送\n\n请尝试使用\n/target_config 目标uid\n进行单个查询\n\n或者使用\n/target_config all\n获取分段的完整配置信息(每段消耗一次查询次数)\n";
+            }
+
+            content += $"\n已用查询次数({user.ConfigNum + 1}/10)\n";
+            await SendPrivateMessageAsync(bot, user, content, cancellationToken);
+        }
+    }
+
+    private void HandleDeleteCommand(UserModel user)
+    {
+        user.Cookie = "";
+        user.Csrf = "";
+        user.Completed = false;
+        user.CookieStatus = CookieStatus.Error;
+        user.Targets.Clear();
+        user.Messages.Clear();
+    }
+
+    #endregion
 }
