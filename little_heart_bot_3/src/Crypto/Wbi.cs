@@ -2,7 +2,7 @@
 using System.Text;
 using System.Text.Json.Nodes;
 
-namespace little_heart_bot_3.Others;
+namespace little_heart_bot_3.Crypto;
 
 public static class Wbi
 {
