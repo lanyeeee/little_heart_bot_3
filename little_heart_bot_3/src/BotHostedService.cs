@@ -18,21 +18,14 @@ public class BotHostedService : BackgroundService
     public BotHostedService(
         [FromKeyedServices("bot:Logger")] ILogger logger,
         IBotService botService,
-        IDbContextFactory<LittleHeartDbContext> dbContextFactory)
+        IDbContextFactory<LittleHeartDbContext> dbContextFactory,
+        IConfiguration configuration)
     {
         _logger = logger;
         _botService = botService;
         _dbContextFactory = dbContextFactory;
 
-        using var db = _dbContextFactory.CreateDbContext();
-        BotModel? botModel = db.Bots.SingleOrDefault();
-        if (botModel is null)
-        {
-            _logger.LogError("数据库bot_table表中没有数据");
-            throw new LittleHeartException("数据库bot_table表中没有数据，请自行添加");
-        }
-
-        _botModel = botModel;
+        _botModel = BotModel.LoadFromConfiguration(configuration);
 
         Globals.AppStatus = _botModel.AppStatus;
         Globals.SendStatus = _botModel.SendStatus;

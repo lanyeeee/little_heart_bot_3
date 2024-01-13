@@ -5,7 +5,6 @@ namespace little_heart_bot_3.Data;
 
 public class LittleHeartDbContext : DbContext
 {
-    public DbSet<BotModel> Bots { get; set; } = null!;
     public DbSet<UserModel> Users { get; set; } = null!;
     public DbSet<MessageModel> Messages { get; set; } = null!;
     public DbSet<TargetModel> Targets { get; set; } = null!;

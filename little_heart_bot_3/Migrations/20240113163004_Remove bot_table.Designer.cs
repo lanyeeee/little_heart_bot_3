@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using little_heart_bot_3.Data;
 
@@ -10,9 +11,10 @@ using little_heart_bot_3.Data;
 namespace little_heart_bot_3.Migrations
 {
     [DbContext(typeof(LittleHeartDbContext))]
-    partial class LittleHeartDbContextModelSnapshot : ModelSnapshot
+    [Migration("20240113163004_Remove bot_table")]
+    partial class Removebot_table
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
