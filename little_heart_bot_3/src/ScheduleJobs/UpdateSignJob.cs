@@ -12,18 +12,14 @@ public class UpdateSignJob : IJob
     private readonly IBotService _botService;
     private readonly BotModel _botModel;
 
-    public UpdateSignJob(IBotService botService, IDbContextFactory<LittleHeartDbContext> dbContextFactory)
+    public UpdateSignJob(IBotService botService, IConfiguration configuration)
     {
         _botService = botService;
-        using var db = dbContextFactory.CreateDbContext();
-        BotModel? botModel = db.Bots.SingleOrDefault();
-
-        _botModel = botModel ?? throw new LittleHeartException("数据库bot_table表中没有数据，请自行添加");
+        _botModel = BotModel.LoadFromConfiguration(configuration);
     }
 
     public async Task Execute(IJobExecutionContext context)
     {
-        Console.WriteLine("UpdateSignJob");
         await _botService.UpdateSignAsync(_botModel);
     }
 }
