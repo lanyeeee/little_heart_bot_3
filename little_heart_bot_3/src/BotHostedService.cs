@@ -46,7 +46,9 @@ public class BotHostedService : BackgroundService
             using var cancellationTokenSource = new CancellationTokenSource();
             try
             {
-                await HandleMessageMain(cancellationTokenSource.Token);
+                await HandleIncomingPrivateMessageAsync(cancellationTokenSource.Token);
+
+                Globals.ReceiveStatus = ReceiveStatus.Normal;
             }
             catch (LittleHeartException ex)
             {
@@ -67,7 +69,7 @@ public class BotHostedService : BackgroundService
 
                         break;
                     case Reason.CookieExpired:
-                        //TODO: 目前如果小心心bot的cookie过期，直接结束bot的task，后续要支持cookie热更新
+                        //TODO: 目前如果小心心bot的cookie过期，直接结束BotHostedService，后续要支持cookie热更新
                         return;
                     default:
                         _logger.LogCritical(ex, "这种情况不应该发生，如果发生了就是代码编写有问题");
@@ -85,6 +87,7 @@ public class BotHostedService : BackgroundService
             finally
             {
                 await cancellationTokenSource.CancelAsync();
+                await Task.Delay(1000, stoppingToken);
             }
         }
     }
@@ -193,33 +196,20 @@ public class BotHostedService : BackgroundService
             }
             else if (timestamp > user.ReadTimestamp) //发新消息的用户
             {
-                IEnumerable<JsonNode?>? messages =
+                IEnumerable<JsonNode?>? privateMessages =
                     await _botService.GetPrivateMessagesAsync(_botModel, user, cancellationToken);
 
                 //只要成功获取用户的私信，无论这些私信是否成功处理，都只处理一次
                 long readTimestamp = user.ReadTimestamp;
                 user.ReadTimestamp = timestamp;
 
-                if (messages is not null)
+                if (privateMessages is not null)
                 {
-                    await HandlePrivateMessagesAsync(user, readTimestamp, messages, cancellationToken);
+                    await HandlePrivateMessagesAsync(user, readTimestamp, privateMessages, cancellationToken);
                 }
             }
 
             await db.SaveChangesAsync(CancellationToken.None);
-        }
-    }
-
-
-    private async Task HandleMessageMain(CancellationToken cancellationToken = default)
-    {
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            await HandleIncomingPrivateMessageAsync(cancellationToken);
-
-            Globals.ReceiveStatus = ReceiveStatus.Normal;
-
-            await Task.Delay(1000, cancellationToken);
         }
     }
 }
