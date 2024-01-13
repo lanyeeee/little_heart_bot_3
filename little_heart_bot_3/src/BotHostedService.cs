@@ -11,10 +11,8 @@ public class BotHostedService : BackgroundService
 {
     private readonly ILogger _logger;
     private readonly IBotService _botService;
-
     private readonly IDbContextFactory<LittleHeartDbContext> _dbContextFactory;
 
-    private long _yesterdayMidnightTimestamp; //今天0点的分钟时间戳
     private readonly BotModel _botModel;
 
     public BotHostedService(
@@ -25,9 +23,6 @@ public class BotHostedService : BackgroundService
         _logger = logger;
         _botService = botService;
         _dbContextFactory = dbContextFactory;
-
-        DateTimeOffset today = DateTime.Today;
-        _yesterdayMidnightTimestamp = today.ToUnixTimeSeconds();
 
         using var db = _dbContextFactory.CreateDbContext();
         BotModel? botModel = db.Bots.SingleOrDefault();
@@ -51,13 +46,7 @@ public class BotHostedService : BackgroundService
             using var cancellationTokenSource = new CancellationTokenSource();
             try
             {
-                //TODO: 把更新签名的任务注册为定时任务，而不是死循环
-                Task updateSignTask = UpdateSignMain(cancellationTokenSource.Token);
-                Task handleMessageTask = HandleMessageMain(cancellationTokenSource.Token);
-
-                //这两个task是死循环，如果结束了只有可能是抛了Ban或者CookieExpired的异常
-                var completedTask = await Task.WhenAny(updateSignTask, handleMessageTask);
-                await completedTask;
+                await HandleMessageMain(cancellationTokenSource.Token);
             }
             catch (LittleHeartException ex)
             {
@@ -98,54 +87,6 @@ public class BotHostedService : BackgroundService
                 await cancellationTokenSource.CancelAsync();
             }
         }
-    }
-
-    private async Task CheckNewDayAsync()
-    {
-        if (!IsNewDay())
-        {
-            return;
-        }
-
-        //记录下今天零点的时间戳
-        DateTimeOffset today = DateTime.Today;
-        long timestamp = _yesterdayMidnightTimestamp;
-        _yesterdayMidnightTimestamp = today.ToUnixTimeSeconds();
-
-        _logger.LogInformation("新的一天开始了，昨日零点的时间戳为{timestamp}，今日零点时间戳为 {yesterdayMidnightTimestamp}",
-            timestamp,
-            _yesterdayMidnightTimestamp);
-
-        await using var db = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
-
-        await foreach (var message in db.Messages)
-        {
-            message.Code = 0;
-            message.Response = null;
-            message.Completed = false;
-        }
-
-        await foreach (var target in db.Targets)
-        {
-            target.Exp = 0;
-            target.WatchedSeconds = 0;
-            target.Completed = false;
-        }
-
-        await foreach (var user in db.Users)
-        {
-            user.Completed = false;
-            user.ConfigNum = 0;
-        }
-
-        await db.SaveChangesAsync(CancellationToken.None);
-    }
-
-    private bool IsNewDay()
-    {
-        var now = DateTimeOffset.Now.ToUnixTimeSeconds();
-        // +180s是为了稍微延后一点，防止B站服务端数据没更新
-        return now - _yesterdayMidnightTimestamp >= Globals.TotalSecondInOneDay + 180;
     }
 
     /// <summary>
@@ -269,23 +210,11 @@ public class BotHostedService : BackgroundService
         }
     }
 
-    private async Task UpdateSignMain(CancellationToken cancellationToken = default)
-    {
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            await _botService.UpdateSignAsync(_botModel, cancellationToken);
-            await Task.Delay(1000, cancellationToken);
-        }
-
-        cancellationToken.ThrowIfCancellationRequested();
-    }
 
     private async Task HandleMessageMain(CancellationToken cancellationToken = default)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            //TODO: 把每天0点更新数据库的任务注册为定时任务，而不是死循环
-            await CheckNewDayAsync();
             await HandleIncomingPrivateMessageAsync(cancellationToken);
 
             Globals.ReceiveStatus = ReceiveStatus.Normal;

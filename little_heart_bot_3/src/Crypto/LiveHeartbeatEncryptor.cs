@@ -4,7 +4,7 @@ using Org.BouncyCastle.Crypto.Digests;
 using Org.BouncyCastle.Crypto.Macs;
 using Org.BouncyCastle.Crypto.Parameters;
 
-namespace little_heart_bot_3.Others;
+namespace little_heart_bot_3.Crypto;
 
 public static class LiveHeartbeatEncryptor
 {

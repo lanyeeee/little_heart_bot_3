@@ -2,6 +2,7 @@
 using System.Text.Json;
 using little_heart_bot_3;
 using little_heart_bot_3.Data;
+using little_heart_bot_3.ScheduleJobs;
 using little_heart_bot_3.Services;
 using little_heart_bot_3.Services.Implements;
 using little_heart_bot_3.Services.Implements.App;
@@ -9,12 +10,36 @@ using little_heart_bot_3.Services.Implements.Bot;
 using Microsoft.EntityFrameworkCore;
 using MySqlConnector;
 using Polly;
+using Quartz;
 using Serilog;
 using Serilog.Enrichers.WithCaller;
 using Serilog.Formatting.Compact;
 using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+builder.Services.AddQuartz(quartzConfig =>
+{
+    var neyDayJobKey = new JobKey("NewDayJob");
+    quartzConfig.AddJob<NewDayJob>(configurator => configurator.WithIdentity(neyDayJobKey));
+    quartzConfig.AddTrigger(configurator =>
+    {
+        configurator.ForJob(neyDayJobKey)
+            .WithIdentity("NewDayJobTrigger")
+            .WithCronSchedule("0 5 0 1/1 * ? *");
+    });
+
+    var updateSignJobKey = new JobKey("UpdateSignJob");
+    quartzConfig.AddJob<UpdateSignJob>(configurator => configurator.WithIdentity(updateSignJobKey));
+    quartzConfig.AddTrigger(configurator =>
+    {
+        configurator.ForJob(updateSignJobKey)
+            .WithIdentity("UpdateSignJobTrigger")
+            .WithCronSchedule("0 0/1 * 1/1 * ? *");
+    });
+});
+
+builder.Services.AddQuartzHostedService(quartzConfig => quartzConfig.WaitForJobsToComplete = true);
 
 builder.Services.AddHttpClient("global")
     .AddTransientHttpErrorPolicy(policyBuilder => policyBuilder.WaitAndRetryAsync(
