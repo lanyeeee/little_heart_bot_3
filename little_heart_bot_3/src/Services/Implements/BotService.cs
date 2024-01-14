@@ -14,7 +14,8 @@ public class BotService : IBotService
     private readonly HttpClient _httpClient;
     private readonly IUserService _userService;
 
-    public BotService([FromKeyedServices("bot:Logger")] ILogger logger,
+    public BotService(
+        ILogger<BotHostedService> logger,
         JsonSerializerOptions options,
         IHttpClientFactory httpClientFactory,
         [FromKeyedServices("bot:UserService")] IUserService userService)
@@ -79,7 +80,7 @@ public class BotService : IBotService
                 Headers = { { "Cookie", bot.Cookie } },
             }.SetRetryCallback((outcome, retryDelay, retryCount) =>
             {
-                _logger.LogWarning(outcome.Exception,
+                _logger.LogDebug(outcome.Exception,
                     "获取与uid {Uid} 的聊天记录时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
                     user.Uid,
                     retryDelay.TotalSeconds,
@@ -147,7 +148,7 @@ public class BotService : IBotService
                 Content = new FormUrlEncodedContent(payload)
             }.SetRetryCallback((outcome, retryDelay, retryCount) =>
             {
-                _logger.LogWarning(outcome.Exception,
+                _logger.LogDebug(outcome.Exception,
                     "更新签名时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
                     retryDelay.TotalSeconds,
                     retryCount);
@@ -167,7 +168,7 @@ public class BotService : IBotService
             else if (code == -111)
             {
                 _logger.LogWithResponse(
-                    () => _logger.LogWarning("小心心bot的Cookie已过期"),
+                    () => _logger.LogCritical("小心心bot的Cookie已过期"),
                     response.ToJsonString(_options));
 
                 throw new LittleHeartException(Reason.CookieExpired);
@@ -219,7 +220,7 @@ public class BotService : IBotService
                 Content = new FormUrlEncodedContent(payload)
             }.SetRetryCallback((outcome, retryDelay, retryCount) =>
             {
-                _logger.LogWarning(outcome.Exception,
+                _logger.LogDebug(outcome.Exception,
                     "给发送 {Uid} 私信时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
                     user.Uid,
                     retryDelay.TotalSeconds,
@@ -371,7 +372,7 @@ public class BotService : IBotService
             Headers = { { "Cookie", bot.Cookie } },
         }.SetRetryCallback((outcome, retryDelay, retryCount) =>
         {
-            _logger.LogWarning(outcome.Exception,
+            _logger.LogDebug(outcome.Exception,
                 "获取normal_session_list时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
                 retryDelay.TotalSeconds,
                 retryCount);
@@ -408,7 +409,7 @@ public class BotService : IBotService
             Headers = { { "Cookie", bot.Cookie } },
         }.SetRetryCallback((outcome, retryDelay, retryCount) =>
         {
-            _logger.LogWarning(outcome.Exception,
+            _logger.LogDebug(outcome.Exception,
                 "获取blocked_session_list时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
                 retryDelay.TotalSeconds,
                 retryCount);
@@ -621,9 +622,6 @@ public class BotService : IBotService
         }
         catch (Exception ex)
         {
-#if DEBUG
-            Console.WriteLine(ex);
-#endif
             _logger.LogError(ex, "uid {uid} 提交的cookie有误", user.Uid);
         }
     }

@@ -45,10 +45,7 @@ public class TargetService : ITargetService
         target.Exp = exp.Value;
         await db.SaveChangesAsync(CancellationToken.None);
 
-#if DEBUG
-        Console.WriteLine($"uid {target.Uid} 在 {target.TargetName} 直播间的经验为 {target.Exp}");
-#endif
-        _logger.LogTrace("uid {Uid} 在 {TargetName} 直播间的经验为 {Exp}",
+        _logger.LogDebug("uid {Uid} 在 {TargetName} 直播间的经验为 {Exp}",
             target.Uid,
             target.TargetName,
             target.Exp);
@@ -68,6 +65,7 @@ public class TargetService : ITargetService
         }
 
         //否则开始观看直播
+        _logger.LogDebug("uid {Uid} 开始观看 {TargetName} 的直播", target.Uid, target.TargetName);
         Dictionary<string, string>? ePayload = await GetEPayloadAsync(target, cancellationToken);
         if (ePayload is null)
         {
@@ -110,7 +108,7 @@ public class TargetService : ITargetService
             RequestUri = uri
         }.SetRetryCallback((outcome, retryDelay, retryCount) =>
         {
-            _logger.LogWarning(outcome.Exception,
+            _logger.LogDebug(outcome.Exception,
                 "获取E心跳包的payload时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
                 retryDelay.TotalSeconds,
                 retryCount);
@@ -179,7 +177,7 @@ public class TargetService : ITargetService
                 Content = new FormUrlEncodedContent(ePayload)
             }.SetRetryCallback((outcome, retryDelay, retryCount) =>
             {
-                _logger.LogWarning(outcome.Exception,
+                _logger.LogDebug(outcome.Exception,
                     "uid {Uid} 发送E心跳包时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
                     target.Uid,
                     retryDelay.TotalSeconds,
@@ -238,7 +236,7 @@ public class TargetService : ITargetService
                 Content = new FormUrlEncodedContent(payload)
             }.SetRetryCallback((outcome, retryDelay, retryCount) =>
             {
-                _logger.LogWarning(outcome.Exception,
+                _logger.LogDebug(outcome.Exception,
                     "uid {Uid} 发送X心跳包时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
                     target.Uid,
                     retryDelay.TotalSeconds,
@@ -346,7 +344,7 @@ public class TargetService : ITargetService
                 Headers = { { "cookie", target.UserModel.Cookie } }
             }.SetRetryCallback((outcome, retryDelay, retryCount) =>
             {
-                _logger.LogWarning(outcome.Exception,
+                _logger.LogDebug(outcome.Exception,
                     "uid {Uid} 获取 {TargetName} 粉丝牌经验时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
                     target.Uid,
                     target.TargetName,
@@ -361,7 +359,7 @@ public class TargetService : ITargetService
             if (code == -101)
             {
                 _logger.LogWithResponse(
-                    () => _logger.LogWarning("uid {Uid} 的cookie已过期",
+                    () => _logger.LogInformation("uid {Uid} 的cookie已过期",
                         target.Uid),
                     response.ToJsonString(_options));
                 throw new LittleHeartException(Reason.CookieExpired);
@@ -453,7 +451,7 @@ public class TargetService : ITargetService
             var data = await PostXAsync(target, xPayload, cancellationToken);
             if (data is null)
             {
-                _logger.LogTrace("因为 uid {Uid} 给 {TargetName} 发送X心跳包失败，停止继续发包，当前观看时长 {WatchedSeconds} 秒",
+                _logger.LogError("因为 uid {Uid} 给 {TargetName} 发送X心跳包失败，停止继续发包，当前观看时长 {WatchedSeconds} 秒",
                     target.Uid,
                     target.TargetName,
                     target.WatchedSeconds);

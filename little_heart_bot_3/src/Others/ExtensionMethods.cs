@@ -1,6 +1,7 @@
 using JetBrains.Annotations;
 using Polly;
 using Serilog.Core;
+using Serilog.Events;
 
 namespace little_heart_bot_3.Others;
 
@@ -42,5 +43,11 @@ public static class ExtensionMethods
             ["callback"] = callback
         });
         return request;
+    }
+
+    public static bool SourceContextEquals(this LogEvent logEvent, Type sourceContext)
+    {
+        return logEvent.Properties.GetValueOrDefault("SourceContext") is ScalarValue sv &&
+               sv.Value?.ToString() == sourceContext.FullName;
     }
 }

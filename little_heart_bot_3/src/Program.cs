@@ -2,6 +2,7 @@
 using System.Text.Json;
 using little_heart_bot_3;
 using little_heart_bot_3.Data;
+using little_heart_bot_3.Others;
 using little_heart_bot_3.ScheduleJobs;
 using little_heart_bot_3.Services;
 using little_heart_bot_3.Services.Implements;
@@ -14,7 +15,6 @@ using Quartz;
 using Serilog;
 using Serilog.Enrichers.WithCaller;
 using Serilog.Formatting.Compact;
-using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -38,7 +38,6 @@ builder.Services.AddQuartz(quartzConfig =>
             .WithCronSchedule("0 0/1 * 1/1 * ? *");
     });
 });
-
 builder.Services.AddQuartzHostedService(quartzConfig => quartzConfig.WaitForJobsToComplete = true);
 
 builder.Services.AddHttpClient("global")
@@ -70,43 +69,63 @@ builder.Services.AddPooledDbContextFactory<LittleHeartDbContext>(options =>
     }
 );
 
+builder.Services.AddSerilog(serilogConfig =>
+{
+    serilogConfig
+        .MinimumLevel.Verbose()
+        .WriteTo.Logger(botConfig =>
+        {
+            botConfig
+                .Filter.ByIncludingOnly(evt => evt.SourceContextEquals(typeof(BotHostedService)))
+                .MinimumLevel.Information()
+                .Enrich.WithCaller()
+                .WriteTo.File(
+                    path: "logs/bot/bot-.clef",
+                    rollingInterval: RollingInterval.Day,
+                    fileSizeLimitBytes: 1 * 1024 * 1024,
+                    rollOnFileSizeLimit: true,
+                    buffered: true,
+                    flushToDiskInterval: TimeSpan.FromSeconds(10),
+                    formatter: new CompactJsonFormatter());
+        })
+        .WriteTo.Logger(appConfig =>
+        {
+            appConfig
+                .Filter.ByIncludingOnly(evt => evt.SourceContextEquals(typeof(AppHostedService)))
+                .MinimumLevel.Information()
+                .Enrich.WithCaller()
+                .WriteTo.File(
+                    path: "logs/app/app-.clef",
+                    rollingInterval: RollingInterval.Day,
+                    fileSizeLimitBytes: 2 * 1024 * 1024,
+                    rollOnFileSizeLimit: true,
+                    buffered: true,
+                    flushToDiskInterval: TimeSpan.FromSeconds(1),
+                    formatter: new CompactJsonFormatter());
+        });
+
+    if (builder.Environment.IsDevelopment())
+    {
+        serilogConfig
+            .WriteTo.Console().MinimumLevel.Verbose()
+            .WriteTo.Logger(debugConfig =>
+            {
+                debugConfig
+                    .MinimumLevel.Verbose()
+                    .Enrich.WithCaller()
+                    .WriteTo.File(
+                        path: "logs/debug/debug.clef",
+                        rollingInterval: RollingInterval.Infinite,
+                        fileSizeLimitBytes: 100 * 1024 * 1024,
+                        rollOnFileSizeLimit: true,
+                        formatter: new CompactJsonFormatter());
+            });
+    }
+});
+
 builder.Services.AddSingleton<JsonSerializerOptions>(_ => new JsonSerializerOptions
 {
     Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-});
-
-builder.Services.AddKeyedSingleton<ILogger>("bot:Logger", (_, _) =>
-{
-    var serilog = new LoggerConfiguration()
-        .MinimumLevel.Verbose()
-        .WriteTo.File(
-            path: "logs/bot/bot-.txt",
-            rollingInterval: RollingInterval.Day,
-            fileSizeLimitBytes: 1 * 1024 * 1024,
-            rollOnFileSizeLimit: true,
-            buffered: true,
-            flushToDiskInterval: TimeSpan.FromSeconds(10),
-            formatter: new CompactJsonFormatter())
-        .Enrich.WithCaller(true)
-        .CreateLogger();
-    return new Logger<Serilog.ILogger>(LoggerFactory.Create(loggerBuilder => loggerBuilder.AddSerilog(serilog)));
-});
-
-builder.Services.AddKeyedSingleton<ILogger>("app:Logger", (_, _) =>
-{
-    var serilog = new LoggerConfiguration()
-        .MinimumLevel.Verbose()
-        .WriteTo.File(
-            path: "logs/app/app-.txt",
-            rollingInterval: RollingInterval.Day,
-            fileSizeLimitBytes: 2 * 1024 * 1024,
-            rollOnFileSizeLimit: true,
-            buffered: true,
-            flushToDiskInterval: TimeSpan.FromSeconds(1),
-            formatter: new CompactJsonFormatter())
-        .Enrich.WithCaller(true)
-        .CreateLogger();
-    return new Logger<Serilog.ILogger>(LoggerFactory.Create(loggerBuilder => loggerBuilder.AddSerilog(serilog)));
 });
 
 builder.Services.AddSingleton<IBotService, BotService>();

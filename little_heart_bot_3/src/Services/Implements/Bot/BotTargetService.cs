@@ -7,7 +7,7 @@ namespace little_heart_bot_3.Services.Implements.Bot;
 public class BotTargetService : Implements.TargetService
 {
     public BotTargetService(
-        [FromKeyedServices("bot:Logger")] ILogger logger,
+        ILogger<BotHostedService> logger,
         JsonSerializerOptions options,
         IHttpClientFactory httpClientFactory,
         IDbContextFactory<LittleHeartDbContext> dbContextFactory)

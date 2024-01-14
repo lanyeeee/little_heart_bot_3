@@ -16,7 +16,7 @@ public class BotHostedService : BackgroundService
     private readonly BotModel _botModel;
 
     public BotHostedService(
-        [FromKeyedServices("bot:Logger")] ILogger logger,
+        ILogger<BotHostedService> logger,
         IBotService botService,
         IDbContextFactory<LittleHeartDbContext> dbContextFactory,
         IConfiguration configuration)
@@ -123,9 +123,7 @@ public class BotHostedService : BackgroundService
                 }
 
                 _logger.LogInformation("{Uid}：{Content}", user.Uid, content);
-#if DEBUG
-                Console.WriteLine($"{user.Uid}：{content}");
-#endif
+
                 string[] pair = content.Split(" ", 2);
                 string command = pair[0].Trim();
                 string? parameter = pair.Length == 2 ? pair[1].Trim() : null;

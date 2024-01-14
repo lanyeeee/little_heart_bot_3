@@ -82,7 +82,7 @@ public class MessageService : IMessageService
                 Content = new FormUrlEncodedContent(payload)
             }.SetRetryCallback((outcome, retryDelay, retryCount) =>
             {
-                _logger.LogWarning(outcome.Exception,
+                _logger.LogDebug(outcome.Exception,
                     "uid {Uid} 给 {TargetName} 点赞时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
                     message.Uid,
                     message.TargetName,
@@ -97,9 +97,6 @@ public class MessageService : IMessageService
 
             if (code == 0)
             {
-#if DEBUG
-                Console.WriteLine($"uid {message.Uid} 给 {message.TargetName} 点赞成功");
-#endif
                 _logger.LogInformation("uid {Uid} 给 {TargetName} 点赞成功",
                     message.Uid,
                     message.TargetName);
@@ -161,9 +158,6 @@ public class MessageService : IMessageService
 
         if (message.Code == 0)
         {
-#if DEBUG
-            Console.WriteLine($"uid {message.Uid} 给 {message.TargetName} 发送弹幕成功");
-#endif
             _logger.LogInformation("uid {Uid} 给 {TargetName} 发送弹幕成功",
                 message.Uid,
                 message.TargetName);
@@ -267,7 +261,7 @@ public class MessageService : IMessageService
             Content = new FormUrlEncodedContent(payload)
         }.SetRetryCallback((outcome, retryDelay, retryCount) =>
         {
-            _logger.LogWarning(outcome.Exception,
+            _logger.LogDebug(outcome.Exception,
                 "uid {Uid} 给 {TargetName} 发送弹幕时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
                 message.Uid,
                 message.TargetName,
