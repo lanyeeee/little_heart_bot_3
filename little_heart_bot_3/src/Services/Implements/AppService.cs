@@ -18,7 +18,8 @@ public class AppService : IAppService
     private readonly IDbContextFactory<LittleHeartDbContext> _dbContextFactory;
 
 
-    public AppService([FromKeyedServices("app:Logger")] ILogger logger,
+    public AppService(
+        ILogger<AppHostedService> logger,
         JsonSerializerOptions options,
         IHttpClientFactory httpclientFactory,
         [FromKeyedServices("app:UserService")] IUserService userService,
@@ -52,7 +53,7 @@ public class AppService : IAppService
                     Headers = { { "Cookie", user.Cookie } }
                 }.SetRetryCallback((outcome, retryDelay, retryCount) =>
                 {
-                    _logger.LogWarning(outcome.Exception,
+                    _logger.LogDebug(outcome.Exception,
                         "uid {Uid} 验证cookie时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
                         user.Uid,
                         retryDelay.TotalSeconds,
@@ -76,7 +77,6 @@ public class AppService : IAppService
                         () => _logger.LogWarning("uid {Uid} 验证cookie的请求被拦截", user.Uid),
                         response.ToJsonString(_options));
 
-                    _logger.LogWarning("uid {Uid} 验证cookie的请求被拦截", user.Uid);
                     throw new LittleHeartException(Reason.Ban);
                 }
                 else if (code == -101)

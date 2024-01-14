@@ -56,7 +56,7 @@ public class UserService : IUserService
                 switch (ex.Reason)
                 {
                     case Reason.CookieExpired:
-                        _logger.LogWarning("uid {Uid} 的cookie已过期", message.Uid);
+                        _logger.LogInformation("uid {Uid} 的cookie已过期", message.Uid);
                         user.CookieStatus = CookieStatus.Error;
                         await db.SaveChangesAsync(cancellationToken);
                         //Cookie过期，不用再发了，直接返回，这个task正常结束
@@ -88,8 +88,6 @@ public class UserService : IUserService
 
             var task = _targetService.StartAsync(target, cancellationToken);
             tasks.Add(task);
-            _logger.LogTrace("uid {Uid} 开始观看 {TargetName} 的直播",
-                user.Uid, target.TargetName);
 
             await Task.Delay(500, cancellationToken);
 
@@ -128,7 +126,7 @@ public class UserService : IUserService
             switch (ex.Reason)
             {
                 case Reason.CookieExpired:
-                    _logger.LogWarning("uid {Uid} 的cookie已过期", user.Uid);
+                    _logger.LogInformation("uid {Uid} 的cookie已过期", user.Uid);
                     user.CookieStatus = CookieStatus.Error;
                     await db.SaveChangesAsync(CancellationToken.None);
                     //Cookie过期，不用再看，直接返回，这个task正常结束
@@ -161,7 +159,7 @@ public class UserService : IUserService
             },
         }.SetRetryCallback((outcome, retryDelay, retryCount) =>
         {
-            _logger.LogWarning(outcome.Exception,
+            _logger.LogDebug(outcome.Exception,
                 "uid {Uid} 获取 {TargetUid} 的信息时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
                 user.Uid,
                 uid,

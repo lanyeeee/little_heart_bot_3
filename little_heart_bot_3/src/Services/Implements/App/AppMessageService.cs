@@ -7,7 +7,7 @@ namespace little_heart_bot_3.Services.Implements.App;
 public class AppMessageService : Implements.MessageService
 {
     public AppMessageService(
-        [FromKeyedServices("app:Logger")] ILogger logger,
+        ILogger<AppHostedService> logger,
         JsonSerializerOptions options,
         IHttpClientFactory httpClientFactory,
         IDbContextFactory<LittleHeartDbContext> dbContextFactory)

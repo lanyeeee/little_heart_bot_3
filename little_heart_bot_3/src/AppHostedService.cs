@@ -3,7 +3,6 @@ using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
 using little_heart_bot_3.Services;
 using Microsoft.EntityFrameworkCore;
-using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 namespace little_heart_bot_3;
 
@@ -13,7 +12,8 @@ public sealed class AppHostedService : BackgroundService
     private readonly IAppService _appService;
     private readonly IDbContextFactory<LittleHeartDbContext> _dbContextFactory;
 
-    public AppHostedService([FromKeyedServices("app:Logger")] ILogger logger,
+    public AppHostedService(
+        ILogger<AppHostedService> logger,
         IAppService appService,
         IDbContextFactory<LittleHeartDbContext> dbContextFactory)
     {
