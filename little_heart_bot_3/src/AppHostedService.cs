@@ -75,7 +75,7 @@ public sealed class AppHostedService : BackgroundService
             }
             finally
             {
-                await Task.Delay(5000, CancellationToken.None);
+                await Task.Delay(5000, stoppingToken);
             }
         }
     }
