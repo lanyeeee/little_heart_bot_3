@@ -98,7 +98,7 @@ public class TargetService : ITargetService
         CancellationToken cancellationToken = default)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
-        db.Attach(target);
+        db.Targets.Attach(target);
 
         var uri = new Uri(
             $"https://api.live.bilibili.com/xlive/web-room/v1/index/getInfoByRoom?&room_id={target.RoomId}");
@@ -400,7 +400,7 @@ public class TargetService : ITargetService
                 case Reason.WithoutMedal:
                 {
                     await using var db = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
-                    db.Remove(target);
+                    db.Targets.Remove(target);
                     await db.SaveChangesAsync(CancellationToken.None);
                     return null;
                 }
@@ -462,7 +462,7 @@ public class TargetService : ITargetService
 
             interval = (int)heartbeatData["heartbeat_interval"]!;
             await using var db = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
-            db.Attach(target);
+            db.Targets.Attach(target);
             target.WatchedSeconds += interval;
             await db.SaveChangesAsync(CancellationToken.None);
 

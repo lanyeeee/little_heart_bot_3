@@ -38,7 +38,7 @@ public class UserService : IUserService
     public async Task SendMessageAsync(UserModel user, CancellationToken cancellationToken = default)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
-        db.Attach(user);
+        db.Users.Attach(user);
 
         foreach (var message in user.Messages)
         {

@@ -150,7 +150,7 @@ public class MessageService : IMessageService
     {
         //不管结果，一条弹幕只发一次
         await using var db = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
-        db.Attach(message);
+        db.Messages.Attach(message);
         message.Completed = true;
         message.Code = (int)response["code"]!;
         message.Response = response.ToString();

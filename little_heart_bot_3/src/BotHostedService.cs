@@ -183,7 +183,7 @@ public class BotHostedService : BackgroundService
                     await HandlePrivateMessagesAsync(user, 0, privateMessages, cancellationToken);
                 }
 
-                await db.AddAsync(user, CancellationToken.None);
+                await db.Users.AddAsync(user, CancellationToken.None);
             }
             else if (timestamp > user.ReadTimestamp) //发新消息的用户
             {
