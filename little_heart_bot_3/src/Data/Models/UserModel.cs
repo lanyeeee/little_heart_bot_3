@@ -68,7 +68,7 @@ public class UserModelEntityTypeConfiguration : IEntityTypeConfiguration<UserMod
 
         builder.Property(u => u.CookieStatus)
             .HasColumnName("cookie_status")
-            .HasDefaultValue(CookieStatus.Normal)
+            .HasDefaultValue(CookieStatus.Unverified)
             .HasComment("0 未验证, 1 正常, -1 异常");
 
         builder.Property(u => u.ConfigNum)

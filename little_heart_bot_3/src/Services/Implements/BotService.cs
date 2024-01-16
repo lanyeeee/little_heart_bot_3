@@ -618,7 +618,7 @@ public class BotService : IBotService
         {
             user.Cookie = parameter.Replace("\n", "");
             user.Csrf = Globals.GetCsrf(user.Cookie);
-            user.CookieStatus = 0;
+            user.CookieStatus = CookieStatus.Unverified;
         }
         catch (Exception ex)
         {
