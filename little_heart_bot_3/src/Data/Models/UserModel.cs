@@ -88,11 +88,11 @@ public class UserModelEntityTypeConfiguration : IEntityTypeConfiguration<UserMod
 
         builder.Property(u => u.CreateTime)
             .HasColumnName("create_time")
-            .HasDefaultValueSql("NOW(6)");
+            .HasDefaultValueSql("datetime('now', 'localtime')");
 
         builder.Property(u => u.UpdateTime)
             .HasColumnName("update_time")
-            .HasDefaultValueSql("NOW(6)");
+            .HasDefaultValueSql("datetime('now', 'localtime')");
 
         #endregion
     }

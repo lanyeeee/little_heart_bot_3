@@ -75,11 +75,11 @@ public class TargetModelEntityTypeConfiguration : IEntityTypeConfiguration<Targe
 
         builder.Property(t => t.CreateTime)
             .HasColumnName("create_time")
-            .HasDefaultValueSql("NOW(6)");
+            .HasDefaultValueSql("datetime('now', 'localtime')");
 
         builder.Property(t => t.UpdateTime)
             .HasColumnName("update_time")
-            .HasDefaultValueSql("NOW(6)");
+            .HasDefaultValueSql("datetime('now', 'localtime')");
 
         #endregion
     }
