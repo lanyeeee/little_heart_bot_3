@@ -13,7 +13,6 @@ using Microsoft.EntityFrameworkCore;
 using Polly;
 using Quartz;
 using Serilog;
-using Serilog.Enrichers.WithCaller;
 using Serilog.Formatting.Compact;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -53,11 +52,12 @@ builder.Services.AddHttpClient("global")
             }
         }));
 
-builder.Services.AddPooledDbContextFactory<LittleHeartDbContext>(options =>
+builder.Services.AddDbContextFactory<LittleHeartDbContext>(options =>
     {
         var connectionStringBuilder = new SqliteConnectionStringBuilder
         {
-            DataSource = builder.Configuration["Sqlite:DataSource"]!
+            DataSource = builder.Configuration["Sqlite:DataSource"]!,
+            DefaultTimeout = 3
         };
 
         options.UseSqlite(connectionStringBuilder.ConnectionString);
@@ -73,7 +73,6 @@ builder.Services.AddSerilog(serilogConfig =>
             botConfig
                 .Filter.ByIncludingOnly(evt => evt.SourceContextEquals(typeof(BotHostedService)))
                 .MinimumLevel.Information()
-                .Enrich.WithCaller()
                 .WriteTo.File(
                     path: "logs/bot/bot-.clef",
                     rollingInterval: RollingInterval.Day,
@@ -88,7 +87,6 @@ builder.Services.AddSerilog(serilogConfig =>
             appConfig
                 .Filter.ByIncludingOnly(evt => evt.SourceContextEquals(typeof(AppHostedService)))
                 .MinimumLevel.Information()
-                .Enrich.WithCaller()
                 .WriteTo.File(
                     path: "logs/app/app-.clef",
                     rollingInterval: RollingInterval.Day,
@@ -107,7 +105,6 @@ builder.Services.AddSerilog(serilogConfig =>
             {
                 debugConfig
                     .MinimumLevel.Verbose()
-                    .Enrich.WithCaller()
                     .WriteTo.File(
                         path: "logs/debug/debug.clef",
                         rollingInterval: RollingInterval.Infinite,
