@@ -77,12 +77,12 @@ public class MessageModelEntityTypeConfiguration : IEntityTypeConfiguration<Mess
             .HasComment("弹幕是否已发送");
 
         builder.Property(m => m.CreateTime)
-            .HasDefaultValueSql("NOW(6)")
-            .HasColumnName("create_time");
+            .HasColumnName("create_time")
+            .HasDefaultValueSql("datetime('now', 'localtime')");
 
         builder.Property(m => m.UpdateTime)
             .HasColumnName("update_time")
-            .HasDefaultValueSql("NOW(6)");
+            .HasDefaultValueSql("datetime('now', 'localtime')");
 
         #endregion
     }

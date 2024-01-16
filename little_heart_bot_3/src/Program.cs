@@ -8,8 +8,8 @@ using little_heart_bot_3.Services;
 using little_heart_bot_3.Services.Implements;
 using little_heart_bot_3.Services.Implements.App;
 using little_heart_bot_3.Services.Implements.Bot;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using MySqlConnector;
 using Polly;
 using Quartz;
 using Serilog;
@@ -55,17 +55,12 @@ builder.Services.AddHttpClient("global")
 
 builder.Services.AddPooledDbContextFactory<LittleHeartDbContext>(options =>
     {
-        var connectionStringBuilder = new MySqlConnectionStringBuilder
+        var connectionStringBuilder = new SqliteConnectionStringBuilder
         {
-            Server = builder.Configuration["MYSQL:host"],
-            Database = builder.Configuration["MYSQL:database"],
-            UserID = builder.Configuration["MYSQL:user"],
-            Password = builder.Configuration["MYSQL:password"]
+            DataSource = builder.Configuration["Sqlite:DataSource"]!
         };
 
-        var serverVersion = ServerVersion.AutoDetect(connectionStringBuilder.ConnectionString);
-
-        options.UseMySql(connectionStringBuilder.ConnectionString, serverVersion);
+        options.UseSqlite(connectionStringBuilder.ConnectionString);
     }
 );
 

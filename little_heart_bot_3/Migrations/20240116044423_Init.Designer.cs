@@ -11,32 +11,31 @@ using little_heart_bot_3.Data;
 namespace little_heart_bot_3.Migrations
 {
     [DbContext(typeof(LittleHeartDbContext))]
-    [Migration("20240113163004_Remove bot_table")]
-    partial class Removebot_table
+    [Migration("20240116044423_Init")]
+    partial class Init
     {
+        /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder
-                .HasAnnotation("ProductVersion", "6.0.25")
-                .HasAnnotation("Relational:MaxIdentifierLength", 64);
+            modelBuilder.HasAnnotation("ProductVersion", "8.0.1");
 
             modelBuilder.Entity("little_heart_bot_3.Data.Models.MessageModel", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("id");
 
                     b.Property<int>("Code")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
+                        .HasColumnType("INTEGER")
                         .HasDefaultValue(0)
                         .HasColumnName("code");
 
                     b.Property<bool>("Completed")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("tinyint(1)")
+                        .HasColumnType("INTEGER")
                         .HasDefaultValue(false)
                         .HasColumnName("completed")
                         .HasComment("弹幕是否已发送");
@@ -48,16 +47,16 @@ namespace little_heart_bot_3.Migrations
 
                     b.Property<DateTime>("CreateTime")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("create_time")
-                        .HasDefaultValueSql("NOW(6)");
+                        .HasDefaultValueSql("datetime('now', 'localtime')");
 
                     b.Property<string>("Response")
                         .HasColumnType("json")
                         .HasColumnName("response");
 
                     b.Property<long>("RoomId")
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("room_id");
 
                     b.Property<string>("TargetName")
@@ -66,19 +65,19 @@ namespace little_heart_bot_3.Migrations
                         .HasColumnName("target_name");
 
                     b.Property<long>("TargetUid")
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("target_uid");
 
                     b.Property<long>("Uid")
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("uid")
                         .HasComment("用户的uid");
 
                     b.Property<DateTime>("UpdateTime")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("update_time")
-                        .HasDefaultValueSql("NOW(6)");
+                        .HasDefaultValueSql("datetime('now', 'localtime')");
 
                     b.HasKey("Id");
 
@@ -92,31 +91,31 @@ namespace little_heart_bot_3.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("id");
 
                     b.Property<bool>("Completed")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("tinyint(1)")
+                        .HasColumnType("INTEGER")
                         .HasDefaultValue(false)
                         .HasColumnName("completed")
                         .HasComment("今日任务是否已完成");
 
                     b.Property<DateTime>("CreateTime")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("create_time")
-                        .HasDefaultValueSql("NOW(6)");
+                        .HasDefaultValueSql("datetime('now', 'localtime')");
 
                     b.Property<int>("Exp")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
+                        .HasColumnType("INTEGER")
                         .HasDefaultValue(0)
                         .HasColumnName("exp")
                         .HasComment("今日已获得的经验");
 
                     b.Property<long>("RoomId")
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("room_id")
                         .HasComment("直播间的room_id");
 
@@ -127,24 +126,24 @@ namespace little_heart_bot_3.Migrations
                         .HasComment("直播间主播的名字");
 
                     b.Property<long>("TargetUid")
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("target_uid")
                         .HasComment("直播间主播的uid");
 
                     b.Property<long>("Uid")
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("uid")
                         .HasComment("用户的uid");
 
                     b.Property<DateTime>("UpdateTime")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("update_time")
-                        .HasDefaultValueSql("NOW(6)");
+                        .HasDefaultValueSql("datetime('now', 'localtime')");
 
                     b.Property<int>("WatchedSeconds")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
+                        .HasColumnType("INTEGER")
                         .HasDefaultValue(0)
                         .HasColumnName("watched_seconds")
                         .HasComment("今日已观看直播的时长");
@@ -161,26 +160,26 @@ namespace little_heart_bot_3.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("id");
 
                     b.Property<bool>("Completed")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("tinyint(1)")
+                        .HasColumnType("INTEGER")
                         .HasDefaultValue(false)
                         .HasColumnName("completed")
                         .HasComment("今日的任务是否已完成");
 
                     b.Property<int>("ConfigNum")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
+                        .HasColumnType("INTEGER")
                         .HasDefaultValue(0)
                         .HasColumnName("config_num")
                         .HasComment("今日查了多少次配置");
 
                     b.Property<long>("ConfigTimestamp")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasDefaultValue(0L)
                         .HasColumnName("config_timestamp")
                         .HasComment("上一次查询配置的时间戳");
@@ -194,16 +193,16 @@ namespace little_heart_bot_3.Migrations
 
                     b.Property<int>("CookieStatus")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(1)
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
                         .HasColumnName("cookie_status")
                         .HasComment("0 未验证, 1 正常, -1 异常");
 
                     b.Property<DateTime>("CreateTime")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("create_time")
-                        .HasDefaultValueSql("NOW(6)");
+                        .HasDefaultValueSql("datetime('now', 'localtime')");
 
                     b.Property<string>("Csrf")
                         .IsRequired()
@@ -214,20 +213,20 @@ namespace little_heart_bot_3.Migrations
 
                     b.Property<long>("ReadTimestamp")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasDefaultValue(0L)
                         .HasColumnName("read_timestamp")
                         .HasComment("上一条已读私信的时间戳，用于找出未读私信");
 
                     b.Property<long>("Uid")
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("uid");
 
                     b.Property<DateTime>("UpdateTime")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("update_time")
-                        .HasDefaultValueSql("NOW(6)");
+                        .HasDefaultValueSql("datetime('now', 'localtime')");
 
                     b.HasKey("Id");
 
