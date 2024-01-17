@@ -181,6 +181,14 @@ public class UserService : IUserService
                 uid);
             return null;
         }
+        else if (code == -352)
+        {
+            _logger.LogWarning(new Exception(response.ToJsonString(_options)),
+                "uid {uid} 获取 {targetUid} 的直播间数据失败，cookie已过期",
+                user.Uid,
+                uid);
+            throw new LittleHeartException(Reason.CookieExpired);
+        }
 
         if (code != 0)
         {
