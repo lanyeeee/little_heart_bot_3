@@ -172,6 +172,10 @@ public class UserService : IUserService
                 uid);
             throw new LittleHeartException(ex.Message, ex, Reason.Ban);
         }
+        catch (FormatException)
+        {
+            throw new LittleHeartException(Reason.UserCookieExpired);
+        }
         catch (LittleHeartException)
         {
             throw;
