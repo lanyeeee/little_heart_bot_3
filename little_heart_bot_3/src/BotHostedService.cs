@@ -160,6 +160,7 @@ public class BotHostedService : BackgroundService
                     Uid = uid,
                     Cookie = string.Empty,
                     Csrf = string.Empty,
+                    CookieStatus = CookieStatus.Error,
                     ReadTimestamp = timestamp,
                     ConfigTimestamp = 0,
                     ConfigNum = 0
