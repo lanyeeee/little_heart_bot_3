@@ -137,7 +137,7 @@ public class BotHostedService : BackgroundService
         //TODO: 需要为每个session进行一次SQL查询，导致性能较差，内存占用高，后续看看能不能优化
         foreach (var session in sessionList)
         {
-            if (session is null)
+            if (session?["last_msg"] is null)
             {
                 continue;
             }
