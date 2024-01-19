@@ -13,6 +13,7 @@ public interface IApiService
     /// <returns>由response body反序列化得来</returns>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="HttpRequestException"></exception>
+    /// <exception cref="FormatException"></exception>
     public Task<JsonNode> VerifyCookiesAsync(UserModel user, CancellationToken cancellationToken = default);
 
 

@@ -43,13 +43,12 @@ public class AppService : IAppService
             {
                 var response = await _apiService.VerifyCookiesAsync(user, cancellationToken);
 
-                bool valid;
                 int? code = (int?)response["code"];
                 switch (code)
                 {
                     case 0:
                         _logger.LogDebug("uid {Uid} 验证cookie成功", user.Uid);
-                        valid = true;
+                        user.CookieStatus = CookieStatus.Normal;
                         break;
                     case -412:
                         _logger.LogWithResponse(
@@ -58,21 +57,17 @@ public class AppService : IAppService
                         throw new LittleHeartException(Reason.Ban);
                     case -101:
                         _logger.LogWithResponse(
-                            () => _logger.LogInformation("uid {uid} 提供的cookie错误或已过期", user.Uid),
+                            () => _logger.LogInformation("uid {uid} 提供的cookie已过期", user.Uid),
                             response.ToJsonString(_options));
-                        valid = false;
+                        user.CookieStatus = CookieStatus.Error;
                         break;
                     default:
                         _logger.LogWithResponse(
                             () => _logger.LogError("uid {uid} 验证cookie时出现预料之外的错误", user.Uid),
                             response.ToJsonString(_options));
-                        valid = false;
+                        user.CookieStatus = CookieStatus.Error;
                         break;
                 }
-
-                user.CookieStatus = valid ? CookieStatus.Normal : CookieStatus.Error;
-                await db.SaveChangesAsync(cancellationToken);
-                await Task.Delay(1000, cancellationToken);
             }
             catch (HttpRequestException ex)
             {
@@ -80,6 +75,16 @@ public class AppService : IAppService
                     "uid {Uid} 验证cookie时出现 HttpRequestException 异常，重试多次后依旧发生异常",
                     user.Uid);
                 throw new LittleHeartException(ex.Message, ex, Reason.Ban);
+            }
+            catch (FormatException)
+            {
+                _logger.LogInformation("uid {uid} 的cookie格式错误", user.Uid);
+                user.CookieStatus = CookieStatus.Error;
+            }
+            finally
+            {
+                await db.SaveChangesAsync(cancellationToken);
+                await Task.Delay(1000, cancellationToken);
             }
         }
     }
