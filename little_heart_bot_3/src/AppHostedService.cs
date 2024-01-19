@@ -26,52 +26,32 @@ public sealed class AppHostedService : BackgroundService
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            using var cancellationTokenSource = new CancellationTokenSource();
-
-            await using var db = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
+            await using var db = await _dbContextFactory.CreateDbContextAsync(stoppingToken);
             try
             {
-                await _appService.VerifyCookiesAsync(cancellationTokenSource.Token);
-                //TODO: 后续需要改用Semaphore
-                List<UserModel> users = await db.Users.AsNoTracking()
-                    .Include(u => u.Messages)
-                    .Include(u => u.Targets)
-                    .AsSplitQuery()
-                    .Where(u => !u.Completed && u.CookieStatus == CookieStatus.Normal)
-                    .OrderBy(u => u.Id)
-                    .Take(30)
-                    .ToListAsync(cancellationTokenSource.Token);
-
-                await _appService.SendMessageAsync(users, cancellationTokenSource.Token);
-                await _appService.WatchLiveAsync(users, cancellationTokenSource.Token);
+                await _appService.VerifyCookiesAsync(stoppingToken);
+                await _appService.SendMessageAsync(stoppingToken);
+                await _appService.WatchLiveAsync(stoppingToken);
                 Globals.AppStatus = AppStatus.Normal;
             }
-            catch (LittleHeartException ex)
+            catch (LittleHeartException ex) when (ex.Reason == Reason.Ban)
             {
-                switch (ex.Reason)
+                Globals.AppStatus = AppStatus.Cooling;
+                int cd = 15;
+                while (cd != 0)
                 {
-                    case Reason.Ban:
-                        await cancellationTokenSource.CancelAsync();
-                        Globals.AppStatus = AppStatus.Cooling;
-                        int cd = 15;
-                        while (cd != 0)
-                        {
-                            _logger.LogError("请求过于频繁，还需冷却 {cd} 分钟", cd);
-                            await Task.Delay(60 * 1000, CancellationToken.None);
-                            cd--;
-                        }
-
-                        break;
+                    _logger.LogError("请求过于频繁，还需冷却 {cd} 分钟", cd);
+                    await Task.Delay(60 * 1000, stoppingToken);
+                    cd--;
                 }
             }
-            catch (TaskCanceledException)
+            catch (OperationCanceledException)
             {
-                //ignore
+                return;
             }
             catch (Exception ex)
             {
                 _logger.LogCritical(ex, "出现预料之外的错误");
-                Console.WriteLine(ex);
             }
             finally
             {

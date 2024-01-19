@@ -4,15 +4,11 @@ public class LittleHeartException : Exception
 {
     public Reason Reason { get; set; }
 
-    public LittleHeartException() : base(null)
-    {
-    }
-
     public LittleHeartException(Reason reason)
         : base(reason switch
         {
             Reason.Ban => "Ban",
-            Reason.CookieExpired => "CookieExpired",
+            Reason.UserCookieExpired => "CookieExpired",
             Reason.WithoutMedal => "WithoutMedal",
             _ => "Null"
         })
@@ -20,9 +16,6 @@ public class LittleHeartException : Exception
         Reason = reason;
     }
 
-    public LittleHeartException(string? message) : base(message)
-    {
-    }
 
     public LittleHeartException(string? message, Reason reason) : base(message)
     {
@@ -39,6 +32,7 @@ public class LittleHeartException : Exception
 public enum Reason
 {
     Ban,
-    CookieExpired,
-    WithoutMedal
+    UserCookieExpired,
+    WithoutMedal,
+    BotCookieExpired,
 }

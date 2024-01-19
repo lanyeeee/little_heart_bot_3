@@ -37,6 +37,9 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="database\" />
+        <Folder Include="database\"/>
+        <Folder Include="logs\app\"/>
+        <Folder Include="logs\bot\"/>
+        <Folder Include="logs\debug\"/>
     </ItemGroup>
 </Project>

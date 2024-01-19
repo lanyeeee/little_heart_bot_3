@@ -1,6 +1,4 @@
-using JetBrains.Annotations;
 using Polly;
-using Serilog.Core;
 using Serilog.Events;
 
 namespace little_heart_bot_3.Others;

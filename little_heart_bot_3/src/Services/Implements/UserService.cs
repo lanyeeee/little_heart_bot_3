@@ -1,8 +1,6 @@
-﻿using System.Net.Http.Json;
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using little_heart_bot_3.Crypto;
 using little_heart_bot_3.Data;
 using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
@@ -13,31 +11,30 @@ namespace little_heart_bot_3.Services.Implements;
 public class UserService : IUserService
 {
     private readonly ILogger _logger;
+    private readonly JsonSerializerOptions _options;
     private readonly IMessageService _messageService;
     private readonly ITargetService _targetService;
-    private readonly HttpClient _httpClient;
-    private readonly JsonSerializerOptions _options;
+    private readonly IApiService _apiService;
     private readonly IDbContextFactory<LittleHeartDbContext> _dbContextFactory;
 
-
     public UserService(ILogger logger,
+        JsonSerializerOptions options,
         IMessageService messageService,
         ITargetService targetService,
-        JsonSerializerOptions options,
-        IHttpClientFactory httpClientFactory,
+        IApiService apiService,
         IDbContextFactory<LittleHeartDbContext> dbContextFactory)
     {
         _logger = logger;
+        _options = options;
         _messageService = messageService;
         _targetService = targetService;
-        _options = options;
-        _httpClient = httpClientFactory.CreateClient("global");
+        _apiService = apiService;
         _dbContextFactory = dbContextFactory;
     }
 
     public async Task SendMessageAsync(UserModel user, CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         db.Users.Attach(user);
 
         foreach (var message in user.Messages)
@@ -51,63 +48,67 @@ public class UserService : IUserService
                 await _messageService.SendAsync(message, cancellationToken);
                 await Task.Delay(900, cancellationToken);
             }
-            catch (LittleHeartException ex)
+            catch (LittleHeartException ex) when (ex.Reason == Reason.UserCookieExpired)
             {
-                switch (ex.Reason)
-                {
-                    case Reason.CookieExpired:
-                        _logger.LogInformation("uid {Uid} 的cookie已过期", message.Uid);
-                        user.CookieStatus = CookieStatus.Error;
-                        await db.SaveChangesAsync(cancellationToken);
-                        //Cookie过期，不用再发了，直接返回，这个task正常结束
-                        return;
-                    case Reason.Ban:
-                        //风控，抛出异常，由上层通过cancellationTokenSource.Cancel()来结束其他task
-                        throw;
-                }
+                _logger.LogInformation("uid {Uid} 的cookie已过期", message.Uid);
+                user.CookieStatus = CookieStatus.Error;
+                await db.SaveChangesAsync(cancellationToken);
+                //Cookie过期，不用再发了，直接返回，这个task正常结束
+                return;
             }
         }
     }
 
+
     public async Task WatchLiveAsync(UserModel user, CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         db.Users.Attach(user);
 
-        //TODO: 改用Semaphore限制
-        int maxCountPerRound = 10; //每个用户每轮最多同时观看多少个直播
-        int selectedCount = 0; //已经在观看的直播数
+        var semaphore = new SemaphoreSlim(10);
         var tasks = new List<Task>();
-
-        foreach (var target in user.Targets)
-        {
-            if (target.Completed)
-            {
-                continue; //已完成的任务就跳过
-            }
-
-            var task = _targetService.StartAsync(target, cancellationToken);
-            tasks.Add(task);
-
-            await Task.Delay(500, cancellationToken);
-
-            selectedCount++;
-            if (selectedCount >= maxCountPerRound)
-            {
-                break;
-            }
-        }
-
-        _logger.LogInformation("uid {Uid} 正在观看直播，目前同时观看 {SelectedCount} 个目标", user.Uid, selectedCount);
 
         try
         {
+            foreach (var target in user.Targets)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (target.Completed)
+                {
+                    continue; //已完成的任务就跳过
+                }
+
+                // 如果同时观看的直播数量达到上限，等待任意任务完成
+                if (semaphore.CurrentCount == 0)
+                {
+                    Task completedTask = await Task.WhenAny(tasks);
+                    tasks.Remove(completedTask);
+                    await completedTask;
+                }
+
+                var task = Task.Run(async () =>
+                {
+                    await semaphore.WaitAsync(cancellationToken);
+                    try
+                    {
+                        await _targetService.StartAsync(target, cancellationToken);
+                    }
+                    finally
+                    {
+                        semaphore.Release();
+                    }
+                }, cancellationToken);
+
+                tasks.Add(task);
+                await Task.Delay(500, cancellationToken);
+            }
+
             while (tasks.Count != 0)
             {
-                var finishedTask = await Task.WhenAny(tasks);
-                tasks.Remove(finishedTask);
+                var completedTask = await Task.WhenAny(tasks);
+                tasks.Remove(completedTask);
 
-                await finishedTask;
+                await completedTask;
             }
 
             //如果有任何一个任务未完成
@@ -119,87 +120,71 @@ public class UserService : IUserService
             //如果所有任务都完成了
             _logger.LogInformation("uid {Uid} 今日的所有任务已完成", user.Uid);
             user.Completed = true;
-            await db.SaveChangesAsync(CancellationToken.None);
+            await db.SaveChangesAsync(cancellationToken);
         }
-        catch (LittleHeartException ex)
+        catch (LittleHeartException ex) when (ex.Reason == Reason.UserCookieExpired)
         {
-            switch (ex.Reason)
-            {
-                case Reason.CookieExpired:
-                    _logger.LogInformation("uid {Uid} 的cookie已过期", user.Uid);
-                    user.CookieStatus = CookieStatus.Error;
-                    await db.SaveChangesAsync(CancellationToken.None);
-                    //Cookie过期，不用再看，直接返回，这个task正常结束
-                    return;
-                case Reason.Ban:
-                    //风控，抛出异常，由上层通过cancellationTokenSource.Cancel()来结束其他task
-                    throw;
-            }
+            //Cookie过期，不用再看，直接返回，这个task正常结束
+            _logger.LogInformation("uid {Uid} 的cookie已过期", user.Uid);
+            user.CookieStatus = CookieStatus.Error;
+            await db.SaveChangesAsync(cancellationToken);
         }
     }
+
 
     public async Task<JsonNode?> GetOtherUserInfoAsync(UserModel user, long uid,
         CancellationToken cancellationToken = default)
     {
-        var parameters = new Dictionary<string, string> { { "mid", uid.ToString() } };
-        string queryString = await Wbi.GetWbiQueryStringAsync(_httpClient, parameters, cancellationToken);
-
-
-        var requestMessage = new HttpRequestMessage
+        try
         {
-            Method = HttpMethod.Get,
-            RequestUri = new Uri($"https://api.bilibili.com/x/space/wbi/acc/info?{queryString}"),
-            Headers =
+            var response = await _apiService.GetOtherUserInfoAsync(user, uid, cancellationToken);
+
+            int code = (int)response["code"]!;
+            switch (code)
             {
-                {
-                    "user-agent",
-                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36"
-                },
-                { "cookie", user.Cookie }
-            },
-        }.SetRetryCallback((outcome, retryDelay, retryCount) =>
+                case 0:
+                    return response["data"];
+                case -400 or -404:
+                    _logger.LogError(new Exception(response.ToJsonString(_options)),
+                        "uid {uid} 获取 {targetUid} 的用户数据失败",
+                        user.Uid,
+                        uid);
+                    return null;
+                case -352:
+                    _logger.LogWarning(new Exception(response.ToJsonString(_options)),
+                        "uid {uid} 获取 {targetUid} 的用户数据失败，cookie已过期",
+                        user.Uid,
+                        uid);
+                    throw new LittleHeartException(Reason.UserCookieExpired);
+                default:
+                    _logger.LogError(new Exception(response.ToJsonString(_options)),
+                        "uid {uid} 获取 {targetUid} 的用户数据失败",
+                        user.Uid,
+                        uid);
+                    throw new LittleHeartException(Reason.Ban);
+            }
+        }
+        catch (HttpRequestException ex)
         {
-            _logger.LogDebug(outcome.Exception,
-                "uid {Uid} 获取 {TargetUid} 的信息时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
-                user.Uid,
-                uid,
-                retryDelay.TotalSeconds,
-                retryCount);
-        });
-
-        HttpResponseMessage responseMessage = await _httpClient.SendAsync(requestMessage, cancellationToken);
-        await Task.Delay(1000, cancellationToken);
-        var response = (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
-
-        int code = (int)response["code"]!;
-
-        if (code is -400 or -404)
-        {
-            _logger.LogError(new Exception(response.ToJsonString(_options)),
-                "uid {uid} 获取 {targetUid} 的直播间数据失败",
+            _logger.LogError(ex,
+                "uid {Uid} 获取 {TargetUid} 的用户数据出现 HttpRequestException 异常，重试多次后依旧发生异常",
                 user.Uid,
                 uid);
+            throw new LittleHeartException(ex.Message, ex, Reason.Ban);
+        }
+        catch (LittleHeartException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            _logger.LogCritical(e, "uid {Uid} 获取 {TargetUid} 的用户数据时出现意料之外的异常", user.Uid, uid);
             return null;
         }
-        else if (code == -352)
-        {
-            _logger.LogWarning(new Exception(response.ToJsonString(_options)),
-                "uid {uid} 获取 {targetUid} 的直播间数据失败，cookie已过期",
-                user.Uid,
-                uid);
-            throw new LittleHeartException(Reason.CookieExpired);
-        }
-
-        if (code != 0)
-        {
-            _logger.LogError(new Exception(response.ToJsonString(_options)),
-                "uid {uid} 获取 {targetUid} 的直播间数据失败",
-                user.Uid,
-                uid);
-            throw new LittleHeartException(Reason.Ban);
-        }
-
-        return response["data"];
     }
 
     public string? GetConfigAllString(UserModel user)

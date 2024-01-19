@@ -1,5 +1,6 @@
 ﻿using System.Text.Json.Nodes;
 using little_heart_bot_3.Data.Models;
+using little_heart_bot_3.Others;
 
 namespace little_heart_bot_3.Services;
 
@@ -11,6 +12,10 @@ public interface IUserService
     /// <param name="user"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
+    /// <exception cref="OperationCanceledException"></exception>
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.Ban
+    /// </exception>
     public Task SendMessageAsync(UserModel user, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -18,16 +23,25 @@ public interface IUserService
     /// </summary>
     /// <param name="user"></param>
     /// <param name="cancellationToken"></param>
-    /// <returns></returns>
+    /// <exception cref="OperationCanceledException"></exception>
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.Ban
+    /// </exception>
     public Task WatchLiveAsync(UserModel user, CancellationToken cancellationToken = default);
+
 
     /// <summary>
     /// 通过user去获取uid对应用户的详细信息
     /// </summary>
-    /// <param name="user">主动进行信息获取的user</param>
-    /// <param name="uid">被获取信息的用户uid</param>
+    /// <param name="user"></param>
+    /// <param name="uid"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
+    /// <exception cref="OperationCanceledException"></exception>
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.Ban
+    /// <br/>Reason.UserCookieExpired
+    /// </exception>
     public Task<JsonNode?> GetOtherUserInfoAsync(UserModel user, long uid,
         CancellationToken cancellationToken = default);
 

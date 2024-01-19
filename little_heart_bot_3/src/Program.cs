@@ -57,7 +57,7 @@ builder.Services.AddDbContextFactory<LittleHeartDbContext>(options =>
         var connectionStringBuilder = new SqliteConnectionStringBuilder
         {
             DataSource = builder.Configuration["Sqlite:DataSource"]!,
-            DefaultTimeout = 3
+            DefaultTimeout = 10
         };
 
         options.UseSqlite(connectionStringBuilder.ConnectionString);
@@ -123,13 +123,16 @@ builder.Services.AddSingleton<JsonSerializerOptions>(_ => new JsonSerializerOpti
 builder.Services.AddSingleton<IBotService, BotService>();
 builder.Services.AddSingleton<IAppService, AppService>();
 
-//AppMessageService
+//ApiService
+builder.Services.AddKeyedSingleton<IApiService, BotApiService>("bot:ApiService");
+builder.Services.AddKeyedSingleton<IApiService, AppApiService>("app:ApiService");
+//MessageService
 builder.Services.AddKeyedSingleton<IMessageService, BotMessageService>("bot:MessageService");
 builder.Services.AddKeyedSingleton<IMessageService, AppMessageService>("app:MessageService");
-//BotTargetService
+//TargetService
 builder.Services.AddKeyedSingleton<ITargetService, BotTargetService>("bot:TargetService");
 builder.Services.AddKeyedSingleton<ITargetService, AppTargetService>("app:TargetService");
-//BotUserService
+//UserService
 builder.Services.AddKeyedSingleton<IUserService, BotUserService>("bot:UserService");
 builder.Services.AddKeyedSingleton<IUserService, AppUserService>("app:UserService");
 
