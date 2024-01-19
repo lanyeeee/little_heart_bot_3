@@ -11,10 +11,10 @@ public interface ITargetService
     /// </summary>
     /// <param name="target"></param>
     /// <param name="cancellationToken"></param>
+    /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
+    /// <br/>Reason.UserCookieExpired
     /// <br/>Reason.Ban
-    /// <br/>Reason.CookieExpired
     /// </exception>
-    /// <exception cref="TaskCanceledException"></exception>
     public Task StartAsync(TargetModel target, CancellationToken cancellationToken = default);
 }

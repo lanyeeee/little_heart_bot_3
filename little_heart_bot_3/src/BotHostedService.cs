@@ -36,42 +36,26 @@ public class BotHostedService : BackgroundService
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            using var cancellationTokenSource = new CancellationTokenSource();
             try
             {
-                await HandleIncomingPrivateMessageAsync(cancellationTokenSource.Token);
-
+                await HandleIncomingPrivateMessageAsync(stoppingToken);
                 Globals.ReceiveStatus = ReceiveStatus.Normal;
             }
-            catch (LittleHeartException ex)
+            catch (LittleHeartException ex) when (ex.Reason == Reason.Ban)
             {
-                switch (ex.Reason)
+                int cd = 15;
+                Globals.SendStatus = SendStatus.Cooling;
+                Globals.ReceiveStatus = ReceiveStatus.Cooling;
+                while (cd != 0)
                 {
-                    case Reason.Ban:
-                        await cancellationTokenSource.CancelAsync();
-
-                        int cd = 15;
-                        Globals.SendStatus = SendStatus.Cooling;
-                        Globals.ReceiveStatus = ReceiveStatus.Cooling;
-                        while (cd != 0)
-                        {
-                            _logger.LogWarning("遇到风控 还需冷却 {cd} 分钟", cd);
-                            await Task.Delay(60 * 1000, CancellationToken.None);
-                            cd--;
-                        }
-
-                        break;
-                    case Reason.CookieExpired:
-                        //TODO: 目前如果小心心bot的cookie过期，直接结束BotHostedService，后续要支持cookie热更新
-                        return;
-                    default:
-                        _logger.LogCritical(ex, "这种情况不应该发生，如果发生了就是代码编写有问题");
-                        break;
+                    _logger.LogWarning("遇到风控 还需冷却 {cd} 分钟", cd);
+                    await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+                    cd--;
                 }
             }
-            catch (TaskCanceledException)
+            catch (OperationCanceledException)
             {
-                //ignore
+                return;
             }
             catch (Exception ex)
             {
@@ -79,7 +63,6 @@ public class BotHostedService : BackgroundService
             }
             finally
             {
-                await cancellationTokenSource.CancelAsync();
                 await Task.Delay(1000, stoppingToken);
             }
         }
@@ -92,6 +75,10 @@ public class BotHostedService : BackgroundService
     /// <param name="lastTimestamp"></param>
     /// <param name="privateMessages"></param>
     /// <param name="cancellationToken"></param>
+    /// <exception cref="OperationCanceledException"></exception>
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.Ban
+    /// </exception>
     private async Task HandlePrivateMessagesAsync(
         UserModel user,
         long lastTimestamp,
@@ -109,34 +96,36 @@ public class BotHostedService : BackgroundService
                 continue;
             }
 
-            try
+
+            long timestamp = (long)msg["timestamp"]!;
+            string contentJson = (string?)msg["content"]!;
+
+            user.ReadTimestamp = timestamp;
+
+            string? content = JsonNode.Parse(contentJson)!["content"]?.GetValue<string>().Trim();
+            if (string.IsNullOrEmpty(content) || !content.StartsWith('/'))
             {
-                long timestamp = (long)msg["timestamp"]!;
-                string contentJson = (string?)msg["content"]!;
-
-                user.ReadTimestamp = timestamp;
-
-                string? content = JsonNode.Parse(contentJson)!["content"]?.GetValue<string>().Trim();
-                if (string.IsNullOrEmpty(content) || !content.StartsWith('/'))
-                {
-                    continue;
-                }
-
-                _logger.LogInformation("{Uid}：{Content}", user.Uid, content);
-
-                string[] pair = content.Split(" ", 2);
-                string command = pair[0].Trim();
-                string? parameter = pair.Length == 2 ? pair[1].Trim() : null;
-
-                await _botService.HandleCommandAsync(_botModel, user, command, parameter, cancellationToken);
+                continue;
             }
-            catch (Exception ex)
-            {
-                _logger.LogCritical(ex, "处理uid {Uid} 的消息时出错", user.Uid);
-            }
+
+            _logger.LogInformation("{Uid}：{Content}", user.Uid, content);
+
+            string[] pair = content.Split(" ", 2);
+            string command = pair[0].Trim();
+            string? parameter = pair.Length == 2 ? pair[1].Trim() : null;
+
+            await _botService.HandleCommandAsync(_botModel, user, command, parameter, cancellationToken);
         }
     }
 
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="cancellationToken"></param>
+    /// <exception cref="OperationCanceledException"></exception>
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.Ban
+    /// </exception>
     private async Task HandleIncomingPrivateMessageAsync(CancellationToken cancellationToken = default)
     {
         IEnumerable<JsonNode?>? sessionList = await _botService.GetSessionListAsync(_botModel, cancellationToken);
@@ -157,7 +146,7 @@ public class BotHostedService : BackgroundService
             JsonObject lastMsg = session["last_msg"]!.AsObject();
             long timestamp = lastMsg.Count != 0 ? (long)lastMsg["timestamp"]! : 0;
 
-            await using var db = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
+            await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
             var user = await db.Users
                 .Include(u => u.Messages)
                 .Include(u => u.Targets)
@@ -183,7 +172,7 @@ public class BotHostedService : BackgroundService
                     await HandlePrivateMessagesAsync(user, 0, privateMessages, cancellationToken);
                 }
 
-                await db.Users.AddAsync(user, CancellationToken.None);
+                await db.Users.AddAsync(user, cancellationToken);
             }
             else if (timestamp > user.ReadTimestamp) //发新消息的用户
             {
@@ -200,7 +189,7 @@ public class BotHostedService : BackgroundService
                 }
             }
 
-            await db.SaveChangesAsync(CancellationToken.None);
+            await db.SaveChangesAsync(cancellationToken);
         }
     }
 }

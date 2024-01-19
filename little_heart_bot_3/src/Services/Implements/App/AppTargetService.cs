@@ -4,14 +4,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace little_heart_bot_3.Services.Implements.App;
 
-public class AppTargetService : Implements.TargetService
+public class AppTargetService : TargetService
 {
     public AppTargetService(
         ILogger<AppHostedService> logger,
         JsonSerializerOptions options,
-        IHttpClientFactory httpClientFactory,
+        [FromKeyedServices("app:ApiService")] IApiService apiService,
         IDbContextFactory<LittleHeartDbContext> dbContextFactory)
-        : base(logger, options, httpClientFactory, dbContextFactory)
+        : base(logger, options, apiService, dbContextFactory)
     {
     }
 }

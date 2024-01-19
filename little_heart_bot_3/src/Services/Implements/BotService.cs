@@ -1,9 +1,9 @@
-﻿using System.Net.Http.Json;
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Nodes;
-using little_heart_bot_3.Crypto;
+using little_heart_bot_3.Data;
 using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
+using Microsoft.EntityFrameworkCore;
 
 namespace little_heart_bot_3.Services.Implements;
 
@@ -11,28 +11,52 @@ public class BotService : IBotService
 {
     private readonly ILogger _logger;
     private readonly JsonSerializerOptions _options;
-    private readonly HttpClient _httpClient;
+    private readonly IApiService _apiService;
     private readonly IUserService _userService;
+    private readonly IDbContextFactory<LittleHeartDbContext> _dbContextFactory;
 
-    public BotService(
-        ILogger<BotHostedService> logger,
+    public BotService(ILogger<BotHostedService> logger,
         JsonSerializerOptions options,
-        IHttpClientFactory httpClientFactory,
-        [FromKeyedServices("bot:UserService")] IUserService userService)
+        [FromKeyedServices("bot:ApiService")] IApiService apiService,
+        [FromKeyedServices("bot:UserService")] IUserService userService,
+        IDbContextFactory<LittleHeartDbContext> dbContextFactory)
     {
         _logger = logger;
         _options = options;
+        _apiService = apiService;
         _userService = userService;
-        _httpClient = httpClientFactory.CreateClient("global");
+        _dbContextFactory = dbContextFactory;
     }
 
-    public async Task<IEnumerable<JsonNode?>?> GetSessionListAsync(BotModel bot,
+    public async Task<IEnumerable<JsonNode?>?> GetSessionListAsync(
+        BotModel bot,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var normalSessionList = await GetNormalSessionListAsync(bot, cancellationToken);
-            var blockedSessionList = await GetBlockedSessionListAsync(bot, cancellationToken);
+            var normalResponse = await _apiService.GetNormalSessionListAsync(bot, cancellationToken);
+            if ((int)normalResponse["code"]! != 0)
+            {
+                _logger.LogWithResponse(
+                    () => _logger.LogError("获取普通的session_list失败"),
+                    normalResponse.ToJsonString(_options));
+
+                throw new LittleHeartException(Reason.Ban);
+            }
+
+            var normalSessionList = (JsonArray?)normalResponse["data"]!["session_list"];
+
+            var blockedResponse = await _apiService.GetBlockedSessionListAsync(bot, cancellationToken);
+            if ((int)blockedResponse["code"]! != 0)
+            {
+                _logger.LogWithResponse(
+                    () => _logger.LogError("获取被屏蔽的session_list失败"),
+                    blockedResponse.ToJsonString(_options));
+
+                throw new LittleHeartException(Reason.Ban);
+            }
+
+            var blockedSessionList = (JsonArray?)blockedResponse["data"]!["session_list"];
 
             if (normalSessionList is null)
             {
@@ -51,9 +75,13 @@ public class BotService : IBotService
         {
             _logger.LogError(ex,
                 "获取 session_list 时遇到 HttpRequestException 异常，重试多次后依然失败");
-            throw new LittleHeartException(Reason.Ban);
+            throw new LittleHeartException(ex.Message, ex, Reason.Ban);
         }
-        catch (TaskCanceledException)
+        catch (LittleHeartException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
         {
             throw;
         }
@@ -65,31 +93,14 @@ public class BotService : IBotService
         }
     }
 
-    public async Task<IEnumerable<JsonNode?>?> GetPrivateMessagesAsync(BotModel bot, UserModel user,
+    public async Task<IEnumerable<JsonNode?>?> GetPrivateMessagesAsync(
+        BotModel bot,
+        UserModel user,
         CancellationToken cancellationToken = default)
     {
-        var uri = new Uri(
-            $"https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs?talker_id={user.Uid}&session_type=1");
-
         try
         {
-            HttpRequestMessage requestMessage = new HttpRequestMessage
-            {
-                Method = HttpMethod.Get,
-                RequestUri = uri,
-                Headers = { { "Cookie", bot.Cookie } },
-            }.SetRetryCallback((outcome, retryDelay, retryCount) =>
-            {
-                _logger.LogDebug(outcome.Exception,
-                    "获取与uid {Uid} 的聊天记录时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
-                    user.Uid,
-                    retryDelay.TotalSeconds,
-                    retryCount);
-            });
-            HttpResponseMessage responseMessage = await _httpClient.SendAsync(requestMessage, cancellationToken);
-            await Task.Delay(1000, cancellationToken);
-            var response = (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
-
+            var response = await _apiService.GetPrivateMessagesAsync(bot, user, cancellationToken);
             int code = (int)response["code"]!;
 
             if (code != 0)
@@ -107,9 +118,13 @@ public class BotService : IBotService
             _logger.LogError(ex,
                 "获取uid {Uid} 的聊天记录时遇到 HttpRequestException 异常，重试多次后依然失败",
                 user.Uid);
-            throw new LittleHeartException(Reason.Ban);
+            throw new LittleHeartException(ex.Message, ex, Reason.Ban);
         }
-        catch (TaskCanceledException)
+        catch (LittleHeartException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
         {
             throw;
         }
@@ -130,57 +145,35 @@ public class BotService : IBotService
         }
 
         //需要更新
-        string sign = MakeSign();
-
-        var payload = new Dictionary<string, string?>
-        {
-            { "user_sign", sign },
-            { "jsonp", "jsonp" },
-            { "csrf", bot.Csrf }
-        };
         try
         {
-            HttpRequestMessage requestMessage = new HttpRequestMessage
-            {
-                Method = HttpMethod.Post,
-                RequestUri = new Uri("https://api.bilibili.com/x/member/web/sign/update"),
-                Headers = { { "Cookie", bot.Cookie } },
-                Content = new FormUrlEncodedContent(payload)
-            }.SetRetryCallback((outcome, retryDelay, retryCount) =>
-            {
-                _logger.LogDebug(outcome.Exception,
-                    "更新签名时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
-                    retryDelay.TotalSeconds,
-                    retryCount);
-            });
-            HttpResponseMessage responseMessage = await _httpClient.SendAsync(requestMessage, cancellationToken);
-            var response = (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
+            string sign = MakeSign();
+            var response = await _apiService.UpdateSignAsync(bot, sign, cancellationToken);
 
             int code = (int)response["code"]!;
-            if (code == 0)
+            switch (code)
             {
-                _logger.LogInformation("签名改为：{sign}", sign);
-
-                bot.AppStatus = Globals.AppStatus;
-                bot.ReceiveStatus = Globals.ReceiveStatus;
-                bot.SendStatus = Globals.SendStatus;
-            }
-            else if (code == -111)
-            {
-                _logger.LogWithResponse(
-                    () => _logger.LogCritical("小心心bot的Cookie已过期"),
-                    response.ToJsonString(_options));
-
-                throw new LittleHeartException(Reason.CookieExpired);
+                case 0:
+                    _logger.LogInformation("签名改为：{sign}", sign);
+                    break;
+                case -111:
+                    _logger.LogWithResponse(
+                        () => _logger.LogCritical("小心心bot的Cookie已过期"),
+                        response.ToJsonString(_options));
+                    throw new LittleHeartException(Reason.BotCookieExpired);
             }
         }
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex,
                 "小心心bot更新签名时出现 HttpRequestException 异常，重试多次后依然失败");
-            throw new LittleHeartException(Reason.Ban);
+            throw new LittleHeartException(ex.Message, ex, Reason.Ban);
         }
-        catch (TaskCanceledException)
+        catch (LittleHeartException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
         {
             throw;
         }
@@ -190,82 +183,50 @@ public class BotService : IBotService
         }
     }
 
-    public async Task<bool> SendPrivateMessageAsync(BotModel bot,
+    public async Task SendPrivateMessageAsync(
+        BotModel bot,
         UserModel user,
         string content,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            string queryString =
-                await Wbi.GetWbiQueryStringAsync(_httpClient, cancellationToken: cancellationToken);
-
-            var payload = new Dictionary<string, string?>
-            {
-                { "msg[sender_uid]", bot.Uid.ToString() },
-                { "msg[receiver_id]", user.Uid.ToString() },
-                { "msg[receiver_type]", "1" },
-                { "msg[msg_type]", "1" },
-                { "msg[dev_id]", bot.DevId },
-                { "msg[timestamp]", DateTimeOffset.Now.ToUnixTimeSeconds().ToString() },
-                { "msg[content]", new JsonObject { { "content", content } }.ToJsonString(_options) },
-                { "csrf", bot.Csrf }
-            };
-
-            HttpRequestMessage requestMessage = new HttpRequestMessage
-            {
-                Method = HttpMethod.Post,
-                RequestUri = new Uri($"https://api.vc.bilibili.com/web_im/v1/web_im/send_msg?{queryString}"),
-                Headers = { { "Cookie", bot.Cookie } },
-                Content = new FormUrlEncodedContent(payload)
-            }.SetRetryCallback((outcome, retryDelay, retryCount) =>
-            {
-                _logger.LogDebug(outcome.Exception,
-                    "给发送 {Uid} 私信时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
-                    user.Uid,
-                    retryDelay.TotalSeconds,
-                    retryCount);
-            });
-
-            HttpResponseMessage responseMessage = await _httpClient.SendAsync(requestMessage, cancellationToken);
-            await Task.Delay(1000, cancellationToken);
-            var response = (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
-
+            var response = await _apiService.SendPrivateMessageAsync(bot, user, content, cancellationToken);
             int code = (int)response["code"]!;
-
             if (code != 0)
             {
                 _logger.LogWithResponse(
                     () => _logger.LogError("给uid {Uid} 发送私信失败", user.Uid),
                     response.ToJsonString(_options));
-
-                return false;
             }
 
+            //没有抛异常就说明发送成功了
+            await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
             user.ConfigTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds();
             user.ConfigNum++;
-            return true;
+            db.Users.Update(user);
+            await db.SaveChangesAsync(cancellationToken);
         }
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "给uid {Uid} 发送私信时出现 HttpRequestException 异常，重试多次后依然失败，私信的内容为:{Content}",
                 user.Uid,
                 content);
-            throw new LittleHeartException(Reason.Ban);
+            throw new LittleHeartException(ex.Message, ex, Reason.Ban);
         }
-        catch (TaskCanceledException)
+        catch (OperationCanceledException)
         {
             throw;
         }
         catch (Exception ex)
         {
             _logger.LogCritical(ex,
-                "给uid {Uid} 发送私信时出现预料之外的错误，今日停止发送私信，私信的内容为:{Content}",
+                "给uid {Uid} 发送私信时出现预料之外的错误，私信的内容为:{Content}",
                 user.Uid,
                 content);
-            return false;
         }
     }
+
 
     public async Task HandleCommandAsync(
         BotModel bot,
@@ -274,35 +235,56 @@ public class BotService : IBotService
         string? parameter,
         CancellationToken cancellationToken = default)
     {
-        switch (command)
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        db.Users.Attach(user);
+        try
         {
-            case "/target_set" when parameter is not null:
-                await HandleTargetSetCommandAsync(user, parameter, cancellationToken);
-                break;
-            case "/target_delete" when parameter is not null:
-                HandleTargetDeleteCommand(user, parameter);
-                break;
-            case "/message_set" when parameter is not null:
-                await HandleMessageSetCommandAsync(user, parameter, cancellationToken);
-                break;
-            case "/message_delete" when parameter is not null:
-                HandleMessageDeleteCommand(user, parameter);
-                break;
-            case "/cookie_commit" when parameter is not null:
-                HandleCookieCommitCommand(user, parameter);
-                break;
-            case "/config_all":
-                await HandleConfigAllCommandAsync(bot, user, cancellationToken);
-                break;
-            case "/message_config":
-                await HandleMessageConfigCommandAsync(bot, user, parameter, cancellationToken);
-                break;
-            case "/target_config":
-                await HandleTargetConfigCommandAsync(bot, user, parameter, cancellationToken);
-                break;
-            case "/delete":
-                HandleDeleteCommand(user);
-                break;
+            switch (command)
+            {
+                case "/target_set" when parameter is not null:
+                    await HandleTargetSetCommandAsync(user, parameter, cancellationToken);
+                    break;
+                case "/target_delete" when parameter is not null:
+                    HandleTargetDeleteCommand(user, parameter);
+                    break;
+                case "/message_set" when parameter is not null:
+                    await HandleMessageSetCommandAsync(user, parameter, cancellationToken);
+                    break;
+                case "/message_delete" when parameter is not null:
+                    HandleMessageDeleteCommand(user, parameter);
+                    break;
+                case "/cookie_commit" when parameter is not null:
+                    HandleCookieCommitCommand(user, parameter);
+                    break;
+                case "/config_all":
+                    await HandleConfigAllCommandAsync(bot, user, cancellationToken);
+                    break;
+                case "/message_config":
+                    await HandleMessageConfigCommandAsync(bot, user, parameter, cancellationToken);
+                    break;
+                case "/target_config":
+                    await HandleTargetConfigCommandAsync(bot, user, parameter, cancellationToken);
+                    break;
+                case "/delete":
+                    HandleDeleteCommand(user);
+                    break;
+            }
+        }
+        catch (LittleHeartException ex) when (ex.Reason == Reason.UserCookieExpired)
+        {
+            _logger.LogInformation("uid {Uid} 的cookie已过期", user.Uid);
+            user.CookieStatus = CookieStatus.Error;
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex,
+                "处理uid {Uid} 的命令时遇到 HttpRequestException 异常，重试多次后依然失败",
+                user.Uid);
+            throw new LittleHeartException(Reason.Ban);
+        }
+        finally
+        {
+            await db.SaveChangesAsync(cancellationToken);
         }
     }
 
@@ -359,81 +341,20 @@ public class BotService : IBotService
         return sign;
     }
 
-    private async Task<JsonArray?> GetNormalSessionListAsync(
-        BotModel bot,
-        CancellationToken cancellationToken = default)
-    {
-        //普通的私信session
-        HttpRequestMessage requestMessage = new HttpRequestMessage
-        {
-            Method = HttpMethod.Get,
-            RequestUri =
-                new Uri("https://api.vc.bilibili.com/session_svr/v1/session_svr/get_sessions?session_type=1"),
-            Headers = { { "Cookie", bot.Cookie } },
-        }.SetRetryCallback((outcome, retryDelay, retryCount) =>
-        {
-            _logger.LogDebug(outcome.Exception,
-                "获取normal_session_list时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
-                retryDelay.TotalSeconds,
-                retryCount);
-        });
-
-        HttpResponseMessage responseMessage = await _httpClient.SendAsync(requestMessage, cancellationToken);
-        await Task.Delay(1000, cancellationToken);
-        JsonNode response = (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
-
-        int code = (int)response["code"]!;
-        if (code != 0)
-        {
-            _logger.LogWithResponse(
-                () => _logger.LogError("获取普通的session_list失败"),
-                response.ToJsonString(_options));
-
-            throw new LittleHeartException(Reason.Ban);
-        }
-
-        var sessionList = (JsonArray?)response["data"]!["session_list"];
-        return sessionList;
-    }
-
-    private async Task<JsonArray?> GetBlockedSessionListAsync(
-        BotModel bot,
-        CancellationToken cancellationToken = default)
-    {
-        //被屏蔽的私信session
-        HttpRequestMessage requestMessage = new HttpRequestMessage
-        {
-            Method = HttpMethod.Get,
-            RequestUri =
-                new Uri("https://api.vc.bilibili.com/session_svr/v1/session_svr/get_sessions?session_type=5"),
-            Headers = { { "Cookie", bot.Cookie } },
-        }.SetRetryCallback((outcome, retryDelay, retryCount) =>
-        {
-            _logger.LogDebug(outcome.Exception,
-                "获取blocked_session_list时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
-                retryDelay.TotalSeconds,
-                retryCount);
-        });
-
-        HttpResponseMessage responseMessage = await _httpClient.SendAsync(requestMessage, cancellationToken);
-        JsonNode response = (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
-
-        int code = (int)response["code"]!;
-        if (code != 0)
-        {
-            _logger.LogWithResponse(
-                () => _logger.LogError("获取被屏蔽的session_list失败"),
-                response.ToJsonString(_options));
-
-            throw new LittleHeartException(Reason.Ban);
-        }
-
-        var blockedList = (JsonArray?)response["data"]!["session_list"];
-        return blockedList;
-    }
 
     #region CommandHandler
 
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="user"></param>
+    /// <param name="parameter"></param>
+    /// <param name="cancellationToken"></param>
+    /// <exception cref="OperationCanceledException"></exception>
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.Ban
+    /// <br/>Reason.UserCookieExpired
+    /// </exception>
     private async Task HandleTargetSetCommandAsync(
         UserModel user,
         string parameter,
@@ -518,6 +439,17 @@ public class BotService : IBotService
         }
     }
 
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="user"></param>
+    /// <param name="parameter"></param>
+    /// <param name="cancellationToken"></param>
+    /// <exception cref="OperationCanceledException"></exception>
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.Ban
+    /// <br/>Reason.UserCookieExpired
+    /// </exception>
     private async Task HandleMessageSetCommandAsync(
         UserModel user,
         string parameter,
@@ -626,6 +558,16 @@ public class BotService : IBotService
         }
     }
 
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="bot"></param>
+    /// <param name="user"></param>
+    /// <param name="cancellationToken"></param>
+    /// <exception cref="OperationCanceledException"></exception>
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.Ban
+    /// </exception>
     private async Task HandleConfigAllCommandAsync(
         BotModel bot,
         UserModel user,
@@ -640,6 +582,17 @@ public class BotService : IBotService
         await SendPrivateMessageAsync(bot, user, content, cancellationToken);
     }
 
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="bot"></param>
+    /// <param name="user"></param>
+    /// <param name="parameter"></param>
+    /// <param name="cancellationToken"></param>
+    /// <exception cref="OperationCanceledException"></exception>
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.Ban
+    /// </exception>
     private async Task HandleMessageConfigCommandAsync(
         BotModel bot,
         UserModel user,
@@ -700,6 +653,17 @@ public class BotService : IBotService
         }
     }
 
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="bot"></param>
+    /// <param name="user"></param>
+    /// <param name="parameter"></param>
+    /// <param name="cancellationToken"></param>
+    /// <exception cref="OperationCanceledException"></exception>
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.Ban
+    /// </exception>
     private async Task HandleTargetConfigCommandAsync(
         BotModel bot,
         UserModel user,

@@ -1,5 +1,6 @@
 ﻿using System.Text.Json.Nodes;
 using little_heart_bot_3.Data.Models;
+using little_heart_bot_3.Others;
 
 namespace little_heart_bot_3.Services;
 
@@ -11,7 +12,12 @@ public interface IBotService
     /// <param name="bot"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    public Task<IEnumerable<JsonNode?>?> GetSessionListAsync(BotModel bot,
+    /// <exception cref="OperationCanceledException"></exception>
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.Ban
+    /// </exception>
+    public Task<IEnumerable<JsonNode?>?> GetSessionListAsync(
+        BotModel bot,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -21,6 +27,10 @@ public interface IBotService
     /// <param name="user"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
+    /// <exception cref="OperationCanceledException"></exception>
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.Ban
+    /// </exception>
     public Task<IEnumerable<JsonNode?>?> GetPrivateMessagesAsync(BotModel bot, UserModel user,
         CancellationToken cancellationToken = default);
 
@@ -30,6 +40,11 @@ public interface IBotService
     /// <param name="bot"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
+    /// <exception cref="OperationCanceledException"></exception>
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.BotCookieExpired
+    /// <br/>Reason.Ban
+    /// </exception>
     public Task UpdateSignAsync(BotModel bot, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -39,8 +54,11 @@ public interface IBotService
     /// <param name="user"></param>
     /// <param name="content"></param>
     /// <param name="cancellationToken"></param>
-    /// <returns></returns>
-    public Task<bool> SendPrivateMessageAsync(
+    /// <exception cref="OperationCanceledException"></exception>
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.Ban
+    /// </exception>
+    public Task SendPrivateMessageAsync(
         BotModel bot,
         UserModel user,
         string content,
@@ -54,7 +72,10 @@ public interface IBotService
     /// <param name="command"></param>
     /// <param name="parameter"></param>
     /// <param name="cancellationToken"></param>
-    /// <returns></returns>
+    /// <exception cref="OperationCanceledException"></exception>
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.Ban
+    /// </exception>
     public Task HandleCommandAsync(
         BotModel bot,
         UserModel user,

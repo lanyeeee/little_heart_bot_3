@@ -10,7 +10,7 @@ public class MessageModel
     public long TargetUid { get; set; }
     public string TargetName { get; set; } = null!;
     public long RoomId { get; set; }
-    public string? Content { get; set; } = null!;
+    public string? Content { get; set; }
     public int Code { get; set; }
     public string? Response { get; set; }
     public bool Completed { get; set; }
