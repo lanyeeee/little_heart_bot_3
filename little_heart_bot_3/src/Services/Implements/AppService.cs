@@ -31,7 +31,7 @@ public class AppService : IAppService
     public async Task VerifyCookiesAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var users = db.Users
+        var users = db.Users.AsNoTracking()
             .Include(u => u.Messages)
             .Include(u => u.Targets)
             .AsSplitQuery()
@@ -39,53 +39,8 @@ public class AppService : IAppService
 
         foreach (var user in users)
         {
-            try
-            {
-                var response = await _apiService.VerifyCookiesAsync(user, cancellationToken);
-
-                int? code = (int?)response["code"];
-                switch (code)
-                {
-                    case 0:
-                        _logger.LogDebug("uid {Uid} 验证cookie成功", user.Uid);
-                        user.CookieStatus = CookieStatus.Normal;
-                        break;
-                    case -412:
-                        _logger.LogWithResponse(
-                            () => _logger.LogWarning("uid {Uid} 验证cookie的请求被拦截", user.Uid),
-                            response.ToJsonString(_options));
-                        throw new LittleHeartException(Reason.Ban);
-                    case -101:
-                        _logger.LogWithResponse(
-                            () => _logger.LogInformation("uid {uid} 提供的cookie已过期", user.Uid),
-                            response.ToJsonString(_options));
-                        user.CookieStatus = CookieStatus.Error;
-                        break;
-                    default:
-                        _logger.LogWithResponse(
-                            () => _logger.LogError("uid {uid} 验证cookie时出现预料之外的错误", user.Uid),
-                            response.ToJsonString(_options));
-                        user.CookieStatus = CookieStatus.Error;
-                        break;
-                }
-            }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogError(ex,
-                    "uid {Uid} 验证cookie时出现 HttpRequestException 异常，重试多次后依旧发生异常",
-                    user.Uid);
-                throw new LittleHeartException(ex.Message, ex, Reason.Ban);
-            }
-            catch (FormatException)
-            {
-                _logger.LogInformation("uid {uid} 的cookie格式错误", user.Uid);
-                user.CookieStatus = CookieStatus.Error;
-            }
-            finally
-            {
-                await db.SaveChangesAsync(cancellationToken);
-                await Task.Delay(1000, cancellationToken);
-            }
+            await VerifyUserCookiesAsync(user, cancellationToken);
+            await Task.Delay(1000, cancellationToken);
         }
     }
 
@@ -183,6 +138,67 @@ public class AppService : IAppService
             Task completedTask = await Task.WhenAny(tasks);
             tasks.Remove(completedTask);
             await completedTask;
+        }
+    }
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="user"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    /// <exception cref="OperationCanceledException"></exception>
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.Ban
+    /// </exception>
+    private async Task VerifyUserCookiesAsync(UserModel user, CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        try
+        {
+            var response = await _apiService.VerifyCookiesAsync(user, cancellationToken);
+            int? code = (int?)response["code"];
+            switch (code)
+            {
+                case 0:
+                    _logger.LogDebug("uid {Uid} 验证cookie成功", user.Uid);
+                    user.CookieStatus = CookieStatus.Normal;
+                    break;
+                case -412:
+                    _logger.LogWithResponse(
+                        () => _logger.LogWarning("uid {Uid} 验证cookie的请求被拦截", user.Uid),
+                        response.ToJsonString(_options));
+                    throw new LittleHeartException(Reason.Ban);
+                case -101:
+                    _logger.LogWithResponse(
+                        () => _logger.LogInformation("uid {uid} 提供的cookie已过期", user.Uid),
+                        response.ToJsonString(_options));
+                    user.CookieStatus = CookieStatus.Error;
+                    break;
+                default:
+                    _logger.LogWithResponse(
+                        () => _logger.LogError("uid {uid} 验证cookie时出现预料之外的错误", user.Uid),
+                        response.ToJsonString(_options));
+                    user.CookieStatus = CookieStatus.Error;
+                    break;
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex,
+                "uid {Uid} 验证cookie时出现 HttpRequestException 异常，重试多次后依旧发生异常",
+                user.Uid);
+            throw new LittleHeartException(ex.Message, ex, Reason.Ban);
+        }
+        catch (FormatException)
+        {
+            _logger.LogInformation("uid {uid} 的cookie格式错误", user.Uid);
+            user.CookieStatus = CookieStatus.Error;
+        }
+        finally
+        {
+            db.Users.Update(user);
+            await db.SaveChangesAsync(cancellationToken);
         }
     }
 }
