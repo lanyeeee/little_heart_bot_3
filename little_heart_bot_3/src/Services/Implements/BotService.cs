@@ -367,7 +367,7 @@ public class BotService : IBotService
         }
 
         JsonNode? data = await _userService.GetOtherUserInfoAsync(user, targetUid, cancellationToken);
-        if (data is null)
+        if (data?["live_room"] is null)
         {
             return;
         }
@@ -548,13 +548,24 @@ public class BotService : IBotService
     {
         try
         {
+            if (parameter.Any(c => !char.IsAscii(c)))
+            {
+                throw new LittleHeartException(Reason.UserCookieExpired);
+            }
+
+            _ = new HttpRequestMessage()
+            {
+                Headers = { { "Cookie", parameter } }
+            };
+
             user.Cookie = parameter.Replace("\n", "");
             user.Csrf = Globals.GetCsrf(user.Cookie);
             user.CookieStatus = CookieStatus.Unverified;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "uid {uid} 提交的cookie有误", user.Uid);
+            user.CookieStatus = CookieStatus.Error;
+            _logger.LogWarning(ex, "uid {uid} 提交的cookie有误", user.Uid);
         }
     }
 
