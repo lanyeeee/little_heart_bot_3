@@ -8,7 +8,8 @@ public class LittleHeartException : Exception
         : base(reason switch
         {
             Reason.Ban => "Ban",
-            Reason.UserCookieExpired => "CookieExpired",
+            Reason.UserCookieExpired => "UserCookieExpired",
+            Reason.BotCookieExpired => "BotCookieExpired",
             Reason.WithoutMedal => "WithoutMedal",
             _ => "Null"
         })
