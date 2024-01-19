@@ -164,6 +164,8 @@ public class BotHostedService : BackgroundService
                     ConfigTimestamp = 0,
                     ConfigNum = 0
                 };
+                await db.Users.AddAsync(user, cancellationToken);
+                await db.SaveChangesAsync(cancellationToken);
                 IEnumerable<JsonNode?>? privateMessages =
                     await _botService.GetPrivateMessagesAsync(_botModel, user, cancellationToken);
 
@@ -171,8 +173,6 @@ public class BotHostedService : BackgroundService
                 {
                     await HandlePrivateMessagesAsync(user, 0, privateMessages, cancellationToken);
                 }
-
-                await db.Users.AddAsync(user, cancellationToken);
             }
             else if (timestamp > user.ReadTimestamp) //发新消息的用户
             {
