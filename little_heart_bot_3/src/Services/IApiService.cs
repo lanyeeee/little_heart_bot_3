@@ -154,6 +154,7 @@ public interface IApiService
     /// <returns></returns>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="HttpRequestException"></exception>
+    /// <exception cref="FormatException"></exception>
     public Task<JsonNode> GetOtherUserInfoAsync(UserModel user,
         long uid,
         CancellationToken cancellationToken = default);
