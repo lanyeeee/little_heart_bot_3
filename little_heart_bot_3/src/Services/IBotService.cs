@@ -38,6 +38,7 @@ public interface IBotService
     /// 更新签名
     /// </summary>
     /// <param name="bot"></param>
+    /// <param name="sign"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     /// <exception cref="OperationCanceledException"></exception>
@@ -45,7 +46,7 @@ public interface IBotService
     /// <br/>Reason.BotCookieExpired
     /// <br/>Reason.Ban
     /// </exception>
-    public Task UpdateSignAsync(BotModel bot, CancellationToken cancellationToken = default);
+    public Task UpdateSignAsync(BotModel bot, string sign, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// bot向user发送私信，内容为content

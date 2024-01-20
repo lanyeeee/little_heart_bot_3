@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using little_heart_bot_3.Data;
 using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
+using little_heart_bot_3.ScheduleJobs;
 using little_heart_bot_3.Services;
 using Microsoft.EntityFrameworkCore;
 
@@ -26,10 +27,6 @@ public class BotHostedService : BackgroundService
         _dbContextFactory = dbContextFactory;
 
         _botModel = BotModel.LoadFromConfiguration(configuration);
-
-        Globals.AppStatus = _botModel.AppStatus;
-        Globals.SendStatus = _botModel.SendStatus;
-        Globals.ReceiveStatus = _botModel.ReceiveStatus;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -39,13 +36,12 @@ public class BotHostedService : BackgroundService
             try
             {
                 await HandleIncomingPrivateMessageAsync(stoppingToken);
-                Globals.ReceiveStatus = ReceiveStatus.Normal;
+                Globals.BotStatus = BotStatus.Normal;
             }
             catch (LittleHeartException ex) when (ex.Reason == Reason.Ban)
             {
                 int cd = 15;
-                Globals.SendStatus = SendStatus.Cooling;
-                Globals.ReceiveStatus = ReceiveStatus.Cooling;
+                Globals.BotStatus = BotStatus.Cooling;
                 while (cd != 0)
                 {
                     _logger.LogWarning("遇到风控 还需冷却 {cd} 分钟", cd);
@@ -134,7 +130,7 @@ public class BotHostedService : BackgroundService
             return;
         }
 
-        //TODO: 需要为每个session进行一次SQL查询，导致性能较差，内存占用高，后续看看能不能优化
+        //TODO: 需要为每个session进行一次SQL查询，导致GC频繁，后续看看能不能优化
         foreach (var session in sessionList)
         {
             if (session?["last_msg"] is null)

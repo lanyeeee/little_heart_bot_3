@@ -1,6 +1,6 @@
 using little_heart_bot_3.Data;
-using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
+using little_heart_bot_3.ScheduleJobs;
 using little_heart_bot_3.Services;
 using Microsoft.EntityFrameworkCore;
 
