@@ -5,6 +5,7 @@ using little_heart_bot_3.Others;
 using little_heart_bot_3.ScheduleJobs;
 using little_heart_bot_3.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Primitives;
 
 namespace little_heart_bot_3;
 
@@ -13,8 +14,9 @@ public class BotHostedService : BackgroundService
     private readonly ILogger _logger;
     private readonly IBotService _botService;
     private readonly IDbContextFactory<LittleHeartDbContext> _dbContextFactory;
+    private readonly IConfiguration _configuration;
 
-    private readonly BotModel _botModel;
+    private BotModel _botModel = null!;
 
     public BotHostedService(
         ILogger<BotHostedService> logger,
@@ -25,17 +27,44 @@ public class BotHostedService : BackgroundService
         _logger = logger;
         _botService = botService;
         _dbContextFactory = dbContextFactory;
-
-        _botModel = BotModel.LoadFromConfiguration(configuration);
+        _configuration = configuration;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var botStatusLock = new object();
+        ChangeToken.OnChange(
+            () => _configuration.GetReloadToken(),
+            () =>
+            {
+                Globals.BotStatus = null;
+                lock (botStatusLock)
+                {
+                    Monitor.Pulse(botStatusLock);
+                }
+            });
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
+                if (Globals.BotStatus is BotStatus.CookieExpired)
+                {
+                    _logger.LogError("Bot的Cookie已过期，Bot主线程阻塞，直到管理员手动更新Cookie到appsettings.json");
+
+                    lock (botStatusLock)
+                    {
+                        Monitor.Wait(botStatusLock);
+                    }
+
+                    _logger.LogError("Bot的阻塞已解除，继续运行");
+                }
+
+                _botModel = BotModel.LoadFromConfiguration(_configuration) ??
+                            throw new LittleHeartException(Reason.BotCookieExpired);
+
                 await HandleIncomingPrivateMessageAsync(stoppingToken);
+
                 Globals.BotStatus = BotStatus.Normal;
             }
             catch (LittleHeartException ex) when (ex.Reason == Reason.RiskControl)
@@ -48,6 +77,10 @@ public class BotHostedService : BackgroundService
                     await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
                     cd--;
                 }
+            }
+            catch (LittleHeartException ex) when (ex.Reason == Reason.BotCookieExpired)
+            {
+                Globals.BotStatus = BotStatus.CookieExpired;
             }
             catch (OperationCanceledException)
             {
