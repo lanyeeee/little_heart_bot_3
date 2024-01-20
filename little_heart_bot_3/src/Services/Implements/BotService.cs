@@ -137,17 +137,10 @@ public class BotService : IBotService
         }
     }
 
-    public async Task UpdateSignAsync(BotModel bot, CancellationToken cancellationToken = default)
+    public async Task UpdateSignAsync(BotModel bot, string sign, CancellationToken cancellationToken = default)
     {
-        if (!ShouldUpdateSign(bot))
-        {
-            return;
-        }
-
-        //需要更新
         try
         {
-            string sign = MakeSign();
             var response = await _apiService.UpdateSignAsync(bot, sign, cancellationToken);
 
             int code = (int)response["code"]!;
@@ -286,59 +279,6 @@ public class BotService : IBotService
             db.Users.Update(user);
             await db.SaveChangesAsync(cancellationToken);
         }
-    }
-
-    private bool ShouldUpdateSign(BotModel bot)
-    {
-        //有一个不相等就需要更新
-        return bot.AppStatus != Globals.AppStatus ||
-               bot.ReceiveStatus != Globals.ReceiveStatus ||
-               bot.SendStatus != Globals.SendStatus;
-    }
-
-    private string MakeSign()
-    {
-        string sign = "给你【";
-        switch (Globals.AppStatus)
-        {
-            case AppStatus.Normal:
-                sign += "弹幕、点赞、观看直播正常";
-                break;
-            case AppStatus.Cooling:
-                sign += "弹幕、点赞、观看直播冷却中";
-                break;
-        }
-
-        sign += "，";
-
-
-        switch (Globals.ReceiveStatus)
-        {
-            case ReceiveStatus.Normal:
-                sign += "接收私信正常";
-                break;
-            case ReceiveStatus.Cooling:
-                sign += "接收私信冷却中";
-                break;
-        }
-
-        sign += "，";
-
-        switch (Globals.SendStatus)
-        {
-            case SendStatus.Normal:
-                sign += "发送私信正常";
-                break;
-            case SendStatus.Cooling:
-                sign += "发送私信冷却中";
-                break;
-            case SendStatus.Forbidden:
-                sign += "发送私信已禁言";
-                break;
-        }
-
-        sign += "】";
-        return sign;
     }
 
 
