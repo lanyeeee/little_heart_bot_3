@@ -8,7 +8,7 @@ namespace little_heart_bot_3.ScheduleJobs;
 public class UpdateSignJob : IJob
 {
     private readonly IBotService _botService;
-    private readonly BotModel _botModel;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<BotHostedService> _logger;
 
     private static AppStatus? LastAppStatus { get; set; }
@@ -17,8 +17,8 @@ public class UpdateSignJob : IJob
     public UpdateSignJob(IBotService botService, IConfiguration configuration, ILogger<BotHostedService> logger)
     {
         _botService = botService;
+        _configuration = configuration;
         _logger = logger;
-        _botModel = BotModel.LoadFromConfiguration(configuration);
     }
 
     public async Task Execute(IJobExecutionContext context)
@@ -30,11 +30,13 @@ public class UpdateSignJob : IJob
 
         try
         {
+            BotModel botModel = BotModel.LoadFromConfiguration(_configuration) ??
+                                throw new LittleHeartException(Reason.BotCookieExpired);
             // 有任何一个状态发生变化，就更新签名
             if (LastAppStatus != Globals.AppStatus || LastBotStatus != Globals.BotStatus)
             {
                 string sign = MakeSign();
-                await _botService.UpdateSignAsync(_botModel, sign);
+                await _botService.UpdateSignAsync(botModel, sign);
                 LastAppStatus = Globals.AppStatus;
                 LastBotStatus = Globals.BotStatus;
             }

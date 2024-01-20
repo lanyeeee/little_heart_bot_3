@@ -502,7 +502,7 @@ public class BotService : IBotService
             user.Csrf = Globals.GetCsrf(user.Cookie);
             user.CookieStatus = CookieStatus.Unverified;
         }
-        catch (Exception ex)
+        catch (ArgumentOutOfRangeException ex)
         {
             user.CookieStatus = CookieStatus.Error;
             _logger.LogWarning(ex, "uid {uid} 提交的cookie有误", user.Uid);
