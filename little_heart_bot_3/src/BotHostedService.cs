@@ -38,7 +38,7 @@ public class BotHostedService : BackgroundService
                 await HandleIncomingPrivateMessageAsync(stoppingToken);
                 Globals.BotStatus = BotStatus.Normal;
             }
-            catch (LittleHeartException ex) when (ex.Reason == Reason.Ban)
+            catch (LittleHeartException ex) when (ex.Reason == Reason.RiskControl)
             {
                 int cd = 15;
                 Globals.BotStatus = BotStatus.Cooling;
@@ -73,7 +73,7 @@ public class BotHostedService : BackgroundService
     /// <param name="cancellationToken"></param>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     private async Task HandlePrivateMessagesAsync(
         UserModel user,
@@ -120,7 +120,7 @@ public class BotHostedService : BackgroundService
     /// <param name="cancellationToken"></param>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     private async Task HandleIncomingPrivateMessageAsync(CancellationToken cancellationToken = default)
     {

@@ -152,7 +152,7 @@ public class UserService : IUserService
                         "uid {uid} 获取 {targetUid} 的用户数据失败",
                         user.Uid,
                         uid);
-                    throw new LittleHeartException(Reason.Ban);
+                    throw new LittleHeartException(Reason.RiskControl);
             }
         }
         catch (HttpRequestException ex)
@@ -161,7 +161,7 @@ public class UserService : IUserService
                 "uid {Uid} 获取 {TargetUid} 的用户数据出现 HttpRequestException 异常，重试多次后依旧发生异常",
                 user.Uid,
                 uid);
-            throw new LittleHeartException(ex.Message, ex, Reason.Ban);
+            throw new LittleHeartException(ex.Message, ex, Reason.RiskControl);
         }
         catch (FormatException)
         {

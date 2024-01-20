@@ -14,7 +14,7 @@ public interface IUserService
     /// <returns></returns>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     public Task SendMessageAsync(UserModel user, CancellationToken cancellationToken = default);
 
@@ -25,7 +25,7 @@ public interface IUserService
     /// <param name="cancellationToken"></param>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     public Task WatchLiveAsync(UserModel user, CancellationToken cancellationToken = default);
 
@@ -39,7 +39,7 @@ public interface IUserService
     /// <returns></returns>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// <br/>Reason.UserCookieExpired
     /// </exception>
     public Task<JsonNode?> GetOtherUserInfoAsync(UserModel user, long uid,

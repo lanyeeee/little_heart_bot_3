@@ -14,7 +14,7 @@ public interface IBotService
     /// <returns></returns>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     public Task<IEnumerable<JsonNode?>?> GetSessionListAsync(
         BotModel bot,
@@ -29,7 +29,7 @@ public interface IBotService
     /// <returns></returns>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     public Task<IEnumerable<JsonNode?>?> GetPrivateMessagesAsync(BotModel bot, UserModel user,
         CancellationToken cancellationToken = default);
@@ -44,7 +44,7 @@ public interface IBotService
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
     /// <br/>Reason.BotCookieExpired
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     public Task UpdateSignAsync(BotModel bot, string sign, CancellationToken cancellationToken = default);
 
@@ -57,7 +57,7 @@ public interface IBotService
     /// <param name="cancellationToken"></param>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     public Task SendPrivateMessageAsync(
         BotModel bot,
@@ -75,7 +75,7 @@ public interface IBotService
     /// <param name="cancellationToken"></param>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     public Task HandleCommandAsync(
         BotModel bot,

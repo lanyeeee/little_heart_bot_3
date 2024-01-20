@@ -13,7 +13,7 @@ public interface IMessageService
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
     /// <br/>Reason.UserCookieExpired
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     public Task SendAsync(MessageModel message, CancellationToken cancellationToken = default);
 
@@ -26,7 +26,7 @@ public interface IMessageService
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
     /// <br/>Reason.UserCookieExpired, 
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     public Task ThumbsUpAsync(MessageModel message, CancellationToken cancellationToken = default);
 }

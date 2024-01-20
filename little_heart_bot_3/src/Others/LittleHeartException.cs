@@ -7,7 +7,7 @@ public class LittleHeartException : Exception
     public LittleHeartException(Reason reason)
         : base(reason switch
         {
-            Reason.Ban => "Ban",
+            Reason.RiskControl => "RiskControl",
             Reason.UserCookieExpired => "UserCookieExpired",
             Reason.BotCookieExpired => "BotCookieExpired",
             Reason.WithoutMedal => "WithoutMedal",
@@ -32,7 +32,7 @@ public class LittleHeartException : Exception
 
 public enum Reason
 {
-    Ban,
+    RiskControl,
     UserCookieExpired,
     WithoutMedal,
     BotCookieExpired,

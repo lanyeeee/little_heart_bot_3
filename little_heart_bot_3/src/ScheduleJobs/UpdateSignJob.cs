@@ -39,7 +39,7 @@ public class UpdateSignJob : IJob
             Globals.BotStatus = BotStatus.CookieExpired;
             //ignore
         }
-        catch (LittleHeartException ex) when (ex.Reason == Reason.Ban)
+        catch (LittleHeartException ex) when (ex.Reason == Reason.RiskControl)
         {
             //ignore
         }

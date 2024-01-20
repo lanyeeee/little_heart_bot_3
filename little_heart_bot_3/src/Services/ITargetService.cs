@@ -14,7 +14,7 @@ public interface ITargetService
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
     /// <br/>Reason.UserCookieExpired
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     public Task StartAsync(TargetModel target, CancellationToken cancellationToken = default);
 }
