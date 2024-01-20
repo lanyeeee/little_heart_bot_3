@@ -11,8 +11,8 @@ public class UpdateSignJob : IJob
     private readonly BotModel _botModel;
     private readonly ILogger<BotHostedService> _logger;
 
-    private AppStatus? _lastAppStatus;
-    private BotStatus? _lastBotStatus;
+    private static AppStatus? LastAppStatus { get; set; }
+    private static BotStatus? LastBotStatus { get; set; }
 
     public UpdateSignJob(IBotService botService, IConfiguration configuration, ILogger<BotHostedService> logger)
     {
@@ -31,12 +31,12 @@ public class UpdateSignJob : IJob
         try
         {
             // 有任何一个状态发生变化，就更新签名
-            if (_lastAppStatus != Globals.AppStatus || _lastBotStatus != Globals.BotStatus)
+            if (LastAppStatus != Globals.AppStatus || LastBotStatus != Globals.BotStatus)
             {
                 string sign = MakeSign();
                 await _botService.UpdateSignAsync(_botModel, sign);
-                _lastAppStatus = Globals.AppStatus;
-                _lastBotStatus = Globals.BotStatus;
+                LastAppStatus = Globals.AppStatus;
+                LastBotStatus = Globals.BotStatus;
             }
         }
         catch (OperationCanceledException)
