@@ -125,7 +125,7 @@ public class AppService : IAppService
     /// <returns></returns>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     private async Task VerifyUserCookiesAsync(UserModel user, CancellationToken cancellationToken = default)
     {
@@ -144,7 +144,7 @@ public class AppService : IAppService
                     _logger.LogWithResponse(
                         () => _logger.LogWarning("uid {Uid} 验证cookie的请求被拦截", user.Uid),
                         response.ToJsonString(_options));
-                    throw new LittleHeartException(Reason.Ban);
+                    throw new LittleHeartException(Reason.RiskControl);
                 case -101:
                     _logger.LogWithResponse(
                         () => _logger.LogInformation("uid {uid} 提供的cookie已过期", user.Uid),
@@ -164,7 +164,7 @@ public class AppService : IAppService
             _logger.LogError(ex,
                 "uid {Uid} 验证cookie时出现 HttpRequestException 异常，重试多次后依旧发生异常",
                 user.Uid);
-            throw new LittleHeartException(ex.Message, ex, Reason.Ban);
+            throw new LittleHeartException(ex.Message, ex, Reason.RiskControl);
         }
         catch (FormatException)
         {

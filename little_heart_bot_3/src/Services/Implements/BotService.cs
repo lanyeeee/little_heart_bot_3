@@ -41,7 +41,7 @@ public class BotService : IBotService
                     () => _logger.LogError("获取普通的session_list失败"),
                     normalResponse.ToJsonString(_options));
 
-                throw new LittleHeartException(Reason.Ban);
+                throw new LittleHeartException(Reason.RiskControl);
             }
 
             var normalSessionList = (JsonArray?)normalResponse["data"]!["session_list"];
@@ -53,7 +53,7 @@ public class BotService : IBotService
                     () => _logger.LogError("获取被屏蔽的session_list失败"),
                     blockedResponse.ToJsonString(_options));
 
-                throw new LittleHeartException(Reason.Ban);
+                throw new LittleHeartException(Reason.RiskControl);
             }
 
             var blockedSessionList = (JsonArray?)blockedResponse["data"]!["session_list"];
@@ -75,7 +75,7 @@ public class BotService : IBotService
         {
             _logger.LogError(ex,
                 "获取 session_list 时遇到 HttpRequestException 异常，重试多次后依然失败");
-            throw new LittleHeartException(ex.Message, ex, Reason.Ban);
+            throw new LittleHeartException(ex.Message, ex, Reason.RiskControl);
         }
         catch (LittleHeartException)
         {
@@ -108,7 +108,7 @@ public class BotService : IBotService
                 _logger.LogWithResponse(
                     () => _logger.LogError("获取 {uid} 的聊天记录失败", user.Uid),
                     response.ToJsonString(_options));
-                throw new LittleHeartException(Reason.Ban);
+                throw new LittleHeartException(Reason.RiskControl);
             }
 
             return response["data"]!["messages"]?.AsArray().Reverse();
@@ -118,7 +118,7 @@ public class BotService : IBotService
             _logger.LogError(ex,
                 "获取uid {Uid} 的聊天记录时遇到 HttpRequestException 异常，重试多次后依然失败",
                 user.Uid);
-            throw new LittleHeartException(ex.Message, ex, Reason.Ban);
+            throw new LittleHeartException(ex.Message, ex, Reason.RiskControl);
         }
         catch (LittleHeartException)
         {
@@ -160,7 +160,7 @@ public class BotService : IBotService
         {
             _logger.LogError(ex,
                 "小心心bot更新签名时出现 HttpRequestException 异常，重试多次后依然失败");
-            throw new LittleHeartException(ex.Message, ex, Reason.Ban);
+            throw new LittleHeartException(ex.Message, ex, Reason.RiskControl);
         }
         catch (LittleHeartException)
         {
@@ -205,7 +205,7 @@ public class BotService : IBotService
             _logger.LogError(ex, "给uid {Uid} 发送私信时出现 HttpRequestException 异常，重试多次后依然失败，私信的内容为:{Content}",
                 user.Uid,
                 content);
-            throw new LittleHeartException(ex.Message, ex, Reason.Ban);
+            throw new LittleHeartException(ex.Message, ex, Reason.RiskControl);
         }
         catch (OperationCanceledException)
         {
@@ -272,7 +272,7 @@ public class BotService : IBotService
             _logger.LogError(ex,
                 "处理uid {Uid} 的命令时遇到 HttpRequestException 异常，重试多次后依然失败",
                 user.Uid);
-            throw new LittleHeartException(Reason.Ban);
+            throw new LittleHeartException(Reason.RiskControl);
         }
         finally
         {
@@ -292,7 +292,7 @@ public class BotService : IBotService
     /// <param name="cancellationToken"></param>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// <br/>Reason.UserCookieExpired
     /// </exception>
     private async Task HandleTargetSetCommandAsync(
@@ -387,7 +387,7 @@ public class BotService : IBotService
     /// <param name="cancellationToken"></param>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// <br/>Reason.UserCookieExpired
     /// </exception>
     private async Task HandleMessageSetCommandAsync(
@@ -517,7 +517,7 @@ public class BotService : IBotService
     /// <param name="cancellationToken"></param>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     private async Task HandleConfigAllCommandAsync(
         BotModel bot,
@@ -542,7 +542,7 @@ public class BotService : IBotService
     /// <param name="cancellationToken"></param>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     private async Task HandleMessageConfigCommandAsync(
         BotModel bot,
@@ -613,7 +613,7 @@ public class BotService : IBotService
     /// <param name="cancellationToken"></param>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     private async Task HandleTargetConfigCommandAsync(
         BotModel bot,

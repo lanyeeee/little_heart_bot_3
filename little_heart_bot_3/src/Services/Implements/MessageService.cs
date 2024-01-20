@@ -58,7 +58,7 @@ public class MessageService : IMessageService
                             message.Uid,
                             message.TargetName),
                         response.ToJsonString(_options));
-                    throw new LittleHeartException(response.ToJsonString(_options), Reason.Ban);
+                    throw new LittleHeartException(response.ToJsonString(_options), Reason.RiskControl);
                 //Cookie过期
                 case -111 or -101:
                     _logger.LogWithResponse(
@@ -120,7 +120,7 @@ public class MessageService : IMessageService
                             message.Uid,
                             message.TargetName),
                         response.ToJsonString(_options));
-                    throw new LittleHeartException(response.ToJsonString(_options), Reason.Ban);
+                    throw new LittleHeartException(response.ToJsonString(_options), Reason.RiskControl);
             }
         }
         catch (HttpRequestException ex)
@@ -128,7 +128,7 @@ public class MessageService : IMessageService
             _logger.LogError(ex, "uid {Uid} 给 {TargetName} 发送弹幕时出现 HttpRequestException 异常，重试多次后依然失败",
                 message.Uid,
                 message.TargetName);
-            throw new LittleHeartException(ex.Message, ex, Reason.Ban);
+            throw new LittleHeartException(ex.Message, ex, Reason.RiskControl);
         }
         catch (LittleHeartException)
         {
@@ -173,7 +173,7 @@ public class MessageService : IMessageService
                             message.Uid,
                             message.TargetName),
                         response.ToJsonString(_options));
-                    throw new LittleHeartException(Reason.Ban);
+                    throw new LittleHeartException(Reason.RiskControl);
             }
         }
         catch (HttpRequestException ex)
@@ -182,7 +182,7 @@ public class MessageService : IMessageService
                 "uid {Uid} 给 {TargetName} 点赞时出现 HttpRequestException 异常，重试多次后依然失败",
                 message.Uid,
                 message.TargetName);
-            throw new LittleHeartException(ex.Message, ex, Reason.Ban);
+            throw new LittleHeartException(ex.Message, ex, Reason.RiskControl);
         }
         catch (LittleHeartException)
         {

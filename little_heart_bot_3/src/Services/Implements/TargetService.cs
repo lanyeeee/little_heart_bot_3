@@ -114,7 +114,7 @@ public class TargetService : ITargetService
     /// <returns></returns>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     private async Task<Dictionary<string, string>?> GetEPayloadAsync(
         TargetModel target,
@@ -162,7 +162,7 @@ public class TargetService : ITargetService
                             .LogError("获取uid {uid} 直播间的信息失败",
                                 target.TargetUid),
                         response.ToJsonString(_options));
-                    throw new LittleHeartException(Reason.Ban);
+                    throw new LittleHeartException(Reason.RiskControl);
             }
         }
         catch (HttpRequestException ex)
@@ -171,7 +171,7 @@ public class TargetService : ITargetService
                 "uid {Uid} 获取 {TargetName} 的E心跳包Payload时出现 HttpRequestException 异常，且重试多次后仍然出现异常",
                 target.Uid,
                 target.TargetName);
-            throw new LittleHeartException(ex.Message, ex, Reason.Ban);
+            throw new LittleHeartException(ex.Message, ex, Reason.RiskControl);
         }
         catch (LittleHeartException)
         {
@@ -199,7 +199,7 @@ public class TargetService : ITargetService
     /// <returns>payload</returns>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     private async Task<JsonNode?> PostEAsync(
         TargetModel target,
@@ -221,7 +221,7 @@ public class TargetService : ITargetService
                             .LogError("uid {uid} 发送E心跳包失败",
                                 target.TargetUid),
                         response.ToJsonString(_options));
-                    throw new LittleHeartException(Reason.Ban);
+                    throw new LittleHeartException(Reason.RiskControl);
             }
         }
         catch (HttpRequestException ex)
@@ -230,7 +230,7 @@ public class TargetService : ITargetService
                 "uid {Uid} 给 {TargetName} 发送E心跳包时出现 HttpRequestException 异常，且重试多次后仍然出现异常",
                 target.Uid,
                 target.TargetName);
-            throw new LittleHeartException(ex.Message, ex, Reason.Ban);
+            throw new LittleHeartException(ex.Message, ex, Reason.RiskControl);
         }
         catch (LittleHeartException)
         {
@@ -258,7 +258,7 @@ public class TargetService : ITargetService
     /// <returns>payload</returns>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     private async Task<JsonNode?> PostXAsync(
         TargetModel target,
@@ -313,7 +313,7 @@ public class TargetService : ITargetService
                             target.TargetUid,
                             target.TargetName),
                         response.ToJsonString(_options));
-                    throw new LittleHeartException(Reason.Ban);
+                    throw new LittleHeartException(Reason.RiskControl);
             }
         }
         catch (HttpRequestException ex)
@@ -322,7 +322,7 @@ public class TargetService : ITargetService
                 "uid {Uid} 给 {TargetName} 发送X心跳包时出现 HttpRequestException 异常，且重试多次后仍然出现异常",
                 target.Uid,
                 target.TargetName);
-            throw new LittleHeartException(ex.Message, ex, Reason.Ban);
+            throw new LittleHeartException(ex.Message, ex, Reason.RiskControl);
         }
         catch (LittleHeartException)
         {
@@ -357,7 +357,7 @@ public class TargetService : ITargetService
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
     /// <br/>Reason.UserCookieExpired
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     private async Task<int?> GetExpAsync(TargetModel target, CancellationToken cancellationToken = default)
     {
@@ -401,7 +401,7 @@ public class TargetService : ITargetService
                             target.Uid,
                             target.TargetName),
                         response.ToJsonString(_options));
-                    throw new LittleHeartException(Reason.Ban);
+                    throw new LittleHeartException(Reason.RiskControl);
             }
         }
         catch (HttpRequestException ex)
@@ -410,7 +410,7 @@ public class TargetService : ITargetService
                 "uid {Uid} 查询 {TargetName} 的粉丝牌信息时出现 HttpRequestException 异常，且重试多次后仍然出现异常",
                 target.Uid,
                 target.TargetName);
-            throw new LittleHeartException(ex.Message, ex, Reason.Ban);
+            throw new LittleHeartException(ex.Message, ex, Reason.RiskControl);
         }
         catch (LittleHeartException ex) when (ex.Reason == Reason.WithoutMedal)
         {
@@ -452,7 +452,7 @@ public class TargetService : ITargetService
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
     /// <br/>Reason.UserCookieExpired
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     private async Task HeartBeatAsync(
         TargetModel target,

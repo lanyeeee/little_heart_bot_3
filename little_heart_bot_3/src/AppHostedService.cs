@@ -34,7 +34,7 @@ public sealed class AppHostedService : BackgroundService
                 await _appService.WatchLiveAsync(stoppingToken);
                 Globals.AppStatus = AppStatus.Normal;
             }
-            catch (LittleHeartException ex) when (ex.Reason == Reason.Ban)
+            catch (LittleHeartException ex) when (ex.Reason == Reason.RiskControl)
             {
                 Globals.AppStatus = AppStatus.Cooling;
                 int cd = 15;

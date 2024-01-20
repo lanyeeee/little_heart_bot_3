@@ -11,7 +11,7 @@ public interface IAppService
     /// <returns></returns>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     Task VerifyCookiesAsync(CancellationToken cancellationToken = default);
 
@@ -22,7 +22,7 @@ public interface IAppService
     /// <returns></returns>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     Task SendMessageAsync(CancellationToken cancellationToken = default);
 
@@ -33,7 +33,7 @@ public interface IAppService
     /// <returns></returns>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
-    /// <br/>Reason.Ban
+    /// <br/>Reason.RiskControl
     /// </exception>
     Task WatchLiveAsync(CancellationToken cancellationToken = default);
 }
