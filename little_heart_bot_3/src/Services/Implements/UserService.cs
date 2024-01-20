@@ -35,7 +35,7 @@ public class UserService : IUserService
     public async Task SendMessageAsync(UserModel user, CancellationToken cancellationToken = default)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        db.Users.Attach(user);
+
 
         foreach (var message in user.Messages)
         {
@@ -52,6 +52,7 @@ public class UserService : IUserService
             {
                 _logger.LogInformation("uid {Uid} 的cookie已过期", message.Uid);
                 user.CookieStatus = CookieStatus.Error;
+                db.Users.Update(user);
                 await db.SaveChangesAsync(cancellationToken);
                 //Cookie过期，不用再发了，直接返回，这个task正常结束
                 return;
@@ -63,9 +64,7 @@ public class UserService : IUserService
     public async Task WatchLiveAsync(UserModel user, CancellationToken cancellationToken = default)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        db.Users.Attach(user);
 
-        var semaphore = new SemaphoreSlim(10);
         var tasks = new List<Task>();
 
         try
@@ -73,36 +72,26 @@ public class UserService : IUserService
             foreach (var target in user.Targets)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                // 已完成的任务就跳过
                 if (target.Completed)
                 {
-                    continue; //已完成的任务就跳过
+                    continue;
                 }
 
-                // 如果同时观看的直播数量达到上限，等待任意任务完成
-                if (semaphore.CurrentCount == 0)
+                // 启动新的观看任务
+                tasks.Add(_targetService.StartAsync(target, cancellationToken));
+                await Task.Delay(500, cancellationToken);
+
+                // 如果同时运行的任务数量达到上限，等待任意任务完成
+                while (tasks.Count >= 10)
                 {
                     Task completedTask = await Task.WhenAny(tasks);
                     tasks.Remove(completedTask);
                     await completedTask;
                 }
-
-                var task = Task.Run(async () =>
-                {
-                    await semaphore.WaitAsync(cancellationToken);
-                    try
-                    {
-                        await _targetService.StartAsync(target, cancellationToken);
-                    }
-                    finally
-                    {
-                        semaphore.Release();
-                    }
-                }, cancellationToken);
-
-                tasks.Add(task);
-                await Task.Delay(500, cancellationToken);
             }
 
+            // 等待所有任务完成
             while (tasks.Count != 0)
             {
                 var completedTask = await Task.WhenAny(tasks);
@@ -120,6 +109,7 @@ public class UserService : IUserService
             //如果所有任务都完成了
             _logger.LogInformation("uid {Uid} 今日的所有任务已完成", user.Uid);
             user.Completed = true;
+            db.Users.Update(user);
             await db.SaveChangesAsync(cancellationToken);
         }
         catch (LittleHeartException ex) when (ex.Reason == Reason.UserCookieExpired)
@@ -127,6 +117,7 @@ public class UserService : IUserService
             //Cookie过期，不用再看，直接返回，这个task正常结束
             _logger.LogInformation("uid {Uid} 的cookie已过期", user.Uid);
             user.CookieStatus = CookieStatus.Error;
+            db.Users.Update(user);
             await db.SaveChangesAsync(cancellationToken);
         }
     }

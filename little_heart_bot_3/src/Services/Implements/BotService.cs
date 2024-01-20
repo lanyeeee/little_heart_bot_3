@@ -236,7 +236,6 @@ public class BotService : IBotService
         CancellationToken cancellationToken = default)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        db.Users.Attach(user);
         try
         {
             switch (command)
@@ -284,6 +283,7 @@ public class BotService : IBotService
         }
         finally
         {
+            db.Users.Update(user);
             await db.SaveChangesAsync(cancellationToken);
         }
     }
