@@ -54,37 +54,25 @@ public class AppService : IAppService
             .Where(u => !u.Completed && u.CookieStatus == CookieStatus.Normal);
 
         var tasks = new List<Task>();
-        var semaphore = new SemaphoreSlim(10);
 
         foreach (var user in users)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            // 启动新的消息发送任务
+            tasks.Add(_userService.SendMessageAsync(user, cancellationToken));
+            await Task.Delay(100, cancellationToken);
+
             // 如果同时运行的任务数量达到上限，等待任意任务完成
-            if (semaphore.CurrentCount == 0)
+            while (tasks.Count >= 10)
             {
                 Task completedTask = await Task.WhenAny(tasks);
                 tasks.Remove(completedTask);
                 await completedTask;
             }
-
-            // 启动新的消息发送任务
-            var task = Task.Run(async () =>
-            {
-                await semaphore.WaitAsync(cancellationToken);
-                try
-                {
-                    await _userService.SendMessageAsync(user, cancellationToken);
-                }
-                finally
-                {
-                    semaphore.Release();
-                }
-            }, cancellationToken);
-
-            tasks.Add(task);
-            await Task.Delay(100, cancellationToken);
         }
 
+        // 等待所有任务完成
         while (tasks.Count != 0)
         {
             Task completedTask = await Task.WhenAny(tasks);
@@ -103,36 +91,24 @@ public class AppService : IAppService
             .Where(u => !u.Completed && u.CookieStatus == CookieStatus.Normal);
 
         var tasks = new List<Task>();
-        var semaphore = new SemaphoreSlim(10);
         foreach (var user in users)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            // 启动新的观看直播任务
+            tasks.Add(_userService.WatchLiveAsync(user, cancellationToken));
+            await Task.Delay(2000, cancellationToken);
+
             // 如果同时运行的任务数量达到上限，等待任意任务完成
-            if (semaphore.CurrentCount == 0)
+            while (tasks.Count >= 30)
             {
                 Task completedTask = await Task.WhenAny(tasks);
                 tasks.Remove(completedTask);
                 await completedTask;
             }
-
-            // 启动新的消息发送任务
-            var task = Task.Run(async () =>
-            {
-                await semaphore.WaitAsync(cancellationToken);
-                try
-                {
-                    await _userService.WatchLiveAsync(user, cancellationToken);
-                }
-                finally
-                {
-                    semaphore.Release();
-                }
-            }, cancellationToken);
-
-            tasks.Add(task);
-            await Task.Delay(2000, cancellationToken);
         }
 
+        // 等待所有任务完成
         while (tasks.Count != 0)
         {
             Task completedTask = await Task.WhenAny(tasks);
