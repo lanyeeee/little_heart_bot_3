@@ -13,6 +13,7 @@ using Microsoft.EntityFrameworkCore;
 using Polly;
 using Quartz;
 using Serilog;
+using Serilog.Events;
 using Serilog.Formatting.Compact;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -67,7 +68,7 @@ builder.Services.AddDbContextFactory<LittleHeartDbContext>(options =>
 builder.Services.AddSerilog(serilogConfig =>
 {
     serilogConfig
-        .MinimumLevel.Verbose()
+        .MinimumLevel.Information()
         .WriteTo.Logger(botConfig =>
         {
             botConfig
@@ -100,11 +101,13 @@ builder.Services.AddSerilog(serilogConfig =>
     if (builder.Environment.IsDevelopment())
     {
         serilogConfig
-            .WriteTo.Console().MinimumLevel.Verbose()
+            .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Information)
+            .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Information)
+            .WriteTo.Console().MinimumLevel.Debug()
             .WriteTo.Logger(debugConfig =>
             {
                 debugConfig
-                    .MinimumLevel.Verbose()
+                    .MinimumLevel.Debug()
                     .WriteTo.File(
                         path: "logs/debug/debug.clef",
                         rollingInterval: RollingInterval.Infinite,

@@ -401,7 +401,7 @@ public abstract class TargetService : ITargetService
                         response.ToJsonString(_options));
                     throw new LittleHeartException(Reason.WithoutMedal);
                 case 0:
-                    _logger.LogTrace("uid {Uid} 获取 {TargetUid}({TargetName}) 的粉丝牌经验成功",
+                    _logger.LogDebug("uid {Uid} 获取 {TargetUid}({TargetName}) 的粉丝牌经验成功",
                         target.Uid,
                         target.TargetUid,
                         target.TargetName);
@@ -511,7 +511,7 @@ public abstract class TargetService : ITargetService
             interval = (int)heartbeatData["heartbeat_interval"]!;
             target.WatchedSeconds += interval;
 
-            _logger.LogTrace("uid {Uid} 给 {TargetUid}({TargetName}) 发送X心跳包成功，当前观看时长 {WatchedSeconds} 秒",
+            _logger.LogDebug("uid {Uid} 给 {TargetUid}({TargetName}) 发送X心跳包成功，当前观看时长 {WatchedSeconds} 秒",
                 target.Uid,
                 target.TargetUid,
                 target.TargetName,
