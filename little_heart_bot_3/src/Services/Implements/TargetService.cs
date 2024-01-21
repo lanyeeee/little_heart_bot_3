@@ -300,7 +300,6 @@ public abstract class TargetService : ITargetService
                     throw new HttpRequestException(response["message"]!.ToString());
                 case 1012001:
                     //签名错误，心跳包加密失败
-                    Console.WriteLine(payload["s"]);
                     _logger.LogWithResponse(
                         () => _logger.LogError("uid {Uid} 给 {TargetUid}({TargetName}) 发送X心跳包失败，因为签名错误，心跳包加密失败",
                             target.Uid,
