@@ -127,7 +127,7 @@ public sealed class BotHostedService : BackgroundService
 
 
             long timestamp = (long)msg["timestamp"]!;
-            string contentJson = (string?)msg["content"]!;
+            string contentJson = (string)msg["content"]!;
 
             user.ReadTimestamp = timestamp;
 
