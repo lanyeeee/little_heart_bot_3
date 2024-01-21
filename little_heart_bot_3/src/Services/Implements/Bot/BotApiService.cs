@@ -2,7 +2,7 @@
 
 namespace little_heart_bot_3.Services.Implements.Bot;
 
-public class BotApiService : ApiService
+public sealed class BotApiService : ApiService
 {
     public BotApiService(
         JsonSerializerOptions options,

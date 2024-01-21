@@ -7,13 +7,13 @@ using little_heart_bot_3.Others;
 
 namespace little_heart_bot_3.Services.Implements;
 
-public class ApiService : IApiService
+public abstract class ApiService : IApiService
 {
     private readonly ILogger _logger;
     private readonly JsonSerializerOptions _options;
     private readonly HttpClient _httpClient;
 
-    public ApiService(
+    protected ApiService(
         ILogger logger,
         JsonSerializerOptions options,
         IHttpClientFactory httpclientFactory)

@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace little_heart_bot_3.Services.Implements.App;
 
-public class AppUserService : UserService
+public sealed class AppUserService : UserService
 {
     public AppUserService(
         ILogger<AppHostedService> logger,

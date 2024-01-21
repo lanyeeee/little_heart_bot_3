@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace little_heart_bot_3.Services.Implements;
 
-public class UserService : IUserService
+public abstract class UserService : IUserService
 {
     private readonly ILogger _logger;
     private readonly JsonSerializerOptions _options;
@@ -17,7 +17,7 @@ public class UserService : IUserService
     private readonly IApiService _apiService;
     private readonly IDbContextFactory<LittleHeartDbContext> _dbContextFactory;
 
-    public UserService(ILogger logger,
+    protected UserService(ILogger logger,
         JsonSerializerOptions options,
         IMessageService messageService,
         ITargetService targetService,

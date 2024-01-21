@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace little_heart_bot_3.Services.Implements;
 
-public class TargetService : ITargetService
+public abstract class TargetService : ITargetService
 {
     private readonly ILogger _logger;
     private readonly JsonSerializerOptions _options;
@@ -16,7 +16,7 @@ public class TargetService : ITargetService
     private readonly IDbContextFactory<LittleHeartDbContext> _dbContextFactory;
 
 
-    public TargetService(ILogger logger,
+    protected TargetService(ILogger logger,
         JsonSerializerOptions options,
         IApiService apiService,
         IDbContextFactory<LittleHeartDbContext> dbContextFactory)
