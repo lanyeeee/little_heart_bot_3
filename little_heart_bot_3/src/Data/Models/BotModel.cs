@@ -5,9 +5,9 @@ namespace little_heart_bot_3.Data.Models;
 public class BotModel
 {
     public required long Uid { get; init; }
-    public required string Cookie { get; init; } = string.Empty;
-    public required string Csrf { get; init; } = string.Empty;
-    public required string DevId { get; init; } = string.Empty;
+    public required string Cookie { get; init; }
+    public required string Csrf { get; init; }
+    public required string DevId { get; init; }
 
     private BotModel()
     {

@@ -5,20 +5,20 @@ namespace little_heart_bot_3.Data.Models;
 
 public class UserModel
 {
-    public int Id { get; set; }
-    public long Uid { get; set; }
-    public string Cookie { get; set; } = null!;
-    public string Csrf { get; set; } = null!;
+    public int Id { get; init; }
+    public required long Uid { get; init; }
+    public required string Cookie { get; set; }
+    public required string Csrf { get; set; }
     public bool Completed { get; set; }
     public CookieStatus CookieStatus { get; set; }
     public int ConfigNum { get; set; }
     public long ReadTimestamp { get; set; }
     public long ConfigTimestamp { get; set; }
-    public DateTime CreateTime { get; set; }
-    public DateTime UpdateTime { get; set; }
+    public DateTime CreateTime { get; init; }
+    public DateTime UpdateTime { get; init; }
 
-    public List<MessageModel> Messages { get; } = new();
-    public List<TargetModel> Targets { get; } = new();
+    public List<MessageModel> Messages { get; } = [];
+    public List<TargetModel> Targets { get; } = [];
 }
 
 public class UserModelEntityTypeConfiguration : IEntityTypeConfiguration<UserModel>

@@ -5,21 +5,21 @@ namespace little_heart_bot_3.Data.Models;
 
 public class MessageModel
 {
-    public int Id { get; set; }
-    public long Uid { get; set; }
-    public long TargetUid { get; set; }
-    public string TargetName { get; set; } = null!;
-    public long RoomId { get; set; }
+    public int Id { get; init; }
+    public required long Uid { get; init; }
+    public required long TargetUid { get; init; }
+    public required string TargetName { get; init; }
+    public required long RoomId { get; init; }
     public string? Content { get; set; }
     public int Code { get; set; }
     public string? Response { get; set; }
     public bool Completed { get; set; }
 
-    public UserModel UserModel { get; set; } = null!;
+    public UserModel UserModel { get; init; } = null!;
 
-    public DateTime CreateTime { get; set; }
+    public DateTime CreateTime { get; init; }
 
-    public DateTime UpdateTime { get; set; }
+    public DateTime UpdateTime { get; init; }
 }
 
 public class MessageModelEntityTypeConfiguration : IEntityTypeConfiguration<MessageModel>
