@@ -197,8 +197,9 @@ public abstract class ApiService : IApiService
         }.SetRetryCallback((outcome, retryDelay, retryCount) =>
         {
             _logger.LogDebug(outcome.Exception,
-                "uid {Uid} 给 {TargetName} 点赞时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
+                "uid {Uid} 给 {TargetUid}({TargetName}) 点赞时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
                 message.Uid,
+                message.TargetUid,
                 message.TargetName,
                 retryDelay.TotalSeconds,
                 retryCount);
@@ -232,8 +233,9 @@ public abstract class ApiService : IApiService
         }.SetRetryCallback((outcome, retryDelay, retryCount) =>
         {
             _logger.LogDebug(outcome.Exception,
-                "uid {Uid} 给 {TargetName} 发送弹幕时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
+                "uid {Uid} 给 {TargetUid}({TargetName}) 发送弹幕时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
                 message.Uid,
+                message.TargetUid,
                 message.TargetName,
                 retryDelay.TotalSeconds,
                 retryCount);
@@ -257,8 +259,9 @@ public abstract class ApiService : IApiService
         }.SetRetryCallback((outcome, retryDelay, retryCount) =>
         {
             _logger.LogDebug(outcome.Exception,
-                "uid {Uid} 获取 {TargetName} 粉丝牌经验时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
+                "uid {Uid} 获取 {TargetUid}({TargetName}) 粉丝牌经验时遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
                 target.Uid,
+                target.TargetUid,
                 target.TargetName,
                 retryDelay.TotalSeconds,
                 retryCount);
