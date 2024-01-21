@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace little_heart_bot_3.Services.Implements.Bot;
 
-public class BotTargetService : TargetService
+public sealed class BotTargetService : TargetService
 {
     public BotTargetService(
         ILogger<BotHostedService> logger,

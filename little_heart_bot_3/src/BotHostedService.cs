@@ -9,7 +9,7 @@ using Microsoft.Extensions.Primitives;
 
 namespace little_heart_bot_3;
 
-public class BotHostedService : BackgroundService
+public sealed class BotHostedService : BackgroundService
 {
     private readonly ILogger _logger;
     private readonly IBotService _botService;

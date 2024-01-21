@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace little_heart_bot_3.Services.Implements;
 
-public class MessageService : IMessageService
+public abstract class MessageService : IMessageService
 {
     private readonly ILogger _logger;
     private readonly JsonSerializerOptions _options;
@@ -14,7 +14,7 @@ public class MessageService : IMessageService
     private readonly IDbContextFactory<LittleHeartDbContext> _dbContextFactory;
 
 
-    public MessageService(
+    protected MessageService(
         ILogger logger,
         JsonSerializerOptions options,
         IApiService apiService,

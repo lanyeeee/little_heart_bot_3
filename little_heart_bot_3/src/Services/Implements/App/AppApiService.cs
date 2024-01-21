@@ -2,7 +2,7 @@
 
 namespace little_heart_bot_3.Services.Implements.App;
 
-public class AppApiService : ApiService
+public sealed class AppApiService : ApiService
 {
     public AppApiService(
         ILogger<AppHostedService> logger,

@@ -79,7 +79,7 @@ builder.Services.AddSerilog(serilogConfig =>
                     fileSizeLimitBytes: 1 * 1024 * 1024,
                     rollOnFileSizeLimit: true,
                     buffered: true,
-                    flushToDiskInterval: TimeSpan.FromSeconds(10),
+                    flushToDiskInterval: TimeSpan.FromSeconds(1),
                     formatter: new CompactJsonFormatter());
         })
         .WriteTo.Logger(appConfig =>

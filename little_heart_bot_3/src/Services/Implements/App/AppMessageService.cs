@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace little_heart_bot_3.Services.Implements.App;
 
-public class AppMessageService : MessageService
+public sealed class AppMessageService : MessageService
 {
     public AppMessageService(
         ILogger<AppHostedService> logger,

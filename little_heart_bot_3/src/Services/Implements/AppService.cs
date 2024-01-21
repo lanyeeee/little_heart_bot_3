@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace little_heart_bot_3.Services.Implements;
 
-public class AppService : IAppService
+public sealed class AppService : IAppService
 {
     private readonly ILogger _logger;
     private readonly JsonSerializerOptions _options;
