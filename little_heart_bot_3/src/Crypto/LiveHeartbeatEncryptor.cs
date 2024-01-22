@@ -1,8 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
-using Org.BouncyCastle.Crypto.Digests;
-using Org.BouncyCastle.Crypto.Macs;
-using Org.BouncyCastle.Crypto.Parameters;
+using HashLib;
 
 namespace little_heart_bot_3.Crypto;
 
@@ -80,14 +78,11 @@ public static class LiveHeartbeatEncryptor
     {
         byte[] keyBytes = Encoding.UTF8.GetBytes(key);
         byte[] dataBytes = Encoding.UTF8.GetBytes(data);
-
-        HMac hmac = new HMac(new Sha224Digest());
-        hmac.Init(new KeyParameter(keyBytes));
-        hmac.BlockUpdate(dataBytes, 0, dataBytes.Length);
-
-        byte[] result = new byte[hmac.GetMacSize()];
-        hmac.DoFinal(result, 0);
-
+        IHash hash = HashFactory.Crypto.CreateSHA224();
+        var hmac = HashFactory.HMAC.CreateHMAC(hash);
+        hmac.Key = keyBytes;
+        HashAlgorithm algorithm = HashFactory.Wrappers.HashToHashAlgorithm(hmac);
+        byte[] result = algorithm.ComputeHash(dataBytes);
         return BitConverter.ToString(result).Replace("-", "").ToLower();
     }
 }
