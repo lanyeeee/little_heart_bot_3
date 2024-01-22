@@ -45,8 +45,9 @@ public sealed class AppHostedService : BackgroundService
                     cd--;
                 }
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException ex)
             {
+                _logger.LogWarning(ex, "AppHostedService正常退出");
                 return;
             }
             catch (Exception ex)
