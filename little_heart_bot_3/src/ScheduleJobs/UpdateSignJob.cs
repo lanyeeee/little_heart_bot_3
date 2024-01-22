@@ -1,11 +1,11 @@
+using Coravel.Invocable;
 using little_heart_bot_3.Data.Models;
 using little_heart_bot_3.Others;
 using little_heart_bot_3.Services;
-using Quartz;
 
 namespace little_heart_bot_3.ScheduleJobs;
 
-public class UpdateSignJob : IJob
+public class UpdateSignJob : IInvocable
 {
     private readonly IBotService _botService;
     private readonly IConfiguration _configuration;
@@ -21,7 +21,7 @@ public class UpdateSignJob : IJob
         _logger = logger;
     }
 
-    public async Task Execute(IJobExecutionContext context)
+    public async Task Invoke()
     {
         if (Globals.BotStatus is not BotStatus.Normal)
         {

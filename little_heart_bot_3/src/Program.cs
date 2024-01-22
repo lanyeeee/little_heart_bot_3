@@ -1,5 +1,6 @@
 ﻿using System.Text.Encodings.Web;
 using System.Text.Json;
+using Coravel;
 using little_heart_bot_3;
 using little_heart_bot_3.Data;
 using little_heart_bot_3.Others;
@@ -11,34 +12,15 @@ using little_heart_bot_3.Services.Implements.Bot;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Polly;
-using Quartz;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.AddQuartz(quartzConfig =>
-{
-    var neyDayJobKey = new JobKey("NewDayJob");
-    quartzConfig.AddJob<NewDayJob>(configurator => configurator.WithIdentity(neyDayJobKey));
-    quartzConfig.AddTrigger(configurator =>
-    {
-        configurator.ForJob(neyDayJobKey)
-            .WithIdentity("NewDayJobTrigger")
-            .WithCronSchedule("0 5 0 1/1 * ? *");
-    });
-
-    var updateSignJobKey = new JobKey("UpdateSignJob");
-    quartzConfig.AddJob<UpdateSignJob>(configurator => configurator.WithIdentity(updateSignJobKey));
-    quartzConfig.AddTrigger(configurator =>
-    {
-        configurator.ForJob(updateSignJobKey)
-            .WithIdentity("UpdateSignJobTrigger")
-            .WithCronSchedule("0 0/1 * 1/1 * ? *");
-    });
-});
-builder.Services.AddQuartzHostedService(quartzConfig => quartzConfig.WaitForJobsToComplete = true);
+builder.Services.AddTransient<NewDayJob>();
+builder.Services.AddTransient<UpdateSignJob>();
+builder.Services.AddScheduler();
 
 builder.Services.AddHttpClient("global")
     .AddTransientHttpErrorPolicy(policyBuilder => policyBuilder.WaitAndRetryAsync(
@@ -103,6 +85,7 @@ builder.Services.AddSerilog(serilogConfig =>
         serilogConfig
             .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Information)
             .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Information)
+            .MinimumLevel.Override("Microsoft.Extensions.Http.DefaultHttpClientFactory", LogEventLevel.Information)
             .WriteTo.Console().MinimumLevel.Debug()
             .WriteTo.Logger(debugConfig =>
             {
@@ -143,5 +126,11 @@ builder.Services.AddHostedService<BotHostedService>();
 builder.Services.AddHostedService<AppHostedService>();
 
 var host = builder.Build();
+
+host.Services.UseScheduler(scheduler =>
+{
+    scheduler.Schedule<NewDayJob>().DailyAt(16, 5);
+    scheduler.Schedule<UpdateSignJob>().EveryMinute();
+});
 
 host.Run();
