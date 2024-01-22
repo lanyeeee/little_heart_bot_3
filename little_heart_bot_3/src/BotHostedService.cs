@@ -77,13 +77,16 @@ public sealed class BotHostedService : BackgroundService
                     await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
                     cd--;
                 }
+
+                Globals.BotStatus = null;
             }
             catch (LittleHeartException ex) when (ex.Reason == Reason.BotCookieExpired)
             {
                 Globals.BotStatus = BotStatus.CookieExpired;
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException ex)
             {
+                _logger.LogWarning(ex, "BotHostedService正常退出");
                 return;
             }
             catch (Exception ex)
