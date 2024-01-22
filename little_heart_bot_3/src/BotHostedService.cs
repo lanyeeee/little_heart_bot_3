@@ -17,6 +17,7 @@ public sealed class BotHostedService : BackgroundService
     private readonly IConfiguration _configuration;
 
     private BotModel _botModel = null!;
+    private readonly SemaphoreSlim _botStatusSemaphore;
 
     public BotHostedService(
         ILogger<BotHostedService> logger,
@@ -28,22 +29,21 @@ public sealed class BotHostedService : BackgroundService
         _botService = botService;
         _dbContextFactory = dbContextFactory;
         _configuration = configuration;
-    }
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        var botStatusLock = new object();
+        _botStatusSemaphore = new SemaphoreSlim(0, 1);
         ChangeToken.OnChange(
             () => _configuration.GetReloadToken(),
             () =>
             {
                 Globals.BotStatus = null;
-                lock (botStatusLock)
+                if (_botStatusSemaphore.CurrentCount == 0)
                 {
-                    Monitor.Pulse(botStatusLock);
+                    _botStatusSemaphore.Release();
                 }
             });
+    }
 
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -52,10 +52,12 @@ public sealed class BotHostedService : BackgroundService
                 {
                     _logger.LogError("Bot的Cookie已过期，Bot主线程阻塞，直到管理员手动更新Cookie到appsettings.json");
 
-                    lock (botStatusLock)
+                    if (_botStatusSemaphore.CurrentCount == 1)
                     {
-                        Monitor.Wait(botStatusLock);
+                        await _botStatusSemaphore.WaitAsync(stoppingToken);
                     }
+
+                    await _botStatusSemaphore.WaitAsync(stoppingToken);
 
                     _logger.LogError("Bot的阻塞已解除，继续运行");
                 }
@@ -69,16 +71,7 @@ public sealed class BotHostedService : BackgroundService
             }
             catch (LittleHeartException ex) when (ex.Reason == Reason.RiskControl)
             {
-                int cd = 15;
-                Globals.BotStatus = BotStatus.Cooling;
-                while (cd != 0)
-                {
-                    _logger.LogWarning("遇到风控 还需冷却 {cd} 分钟", cd);
-                    await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
-                    cd--;
-                }
-
-                Globals.BotStatus = null;
+                await CoolingDown(stoppingToken);
             }
             catch (LittleHeartException ex) when (ex.Reason == Reason.BotCookieExpired)
             {
@@ -98,6 +91,25 @@ public sealed class BotHostedService : BackgroundService
                 await Task.Delay(1000, stoppingToken);
             }
         }
+    }
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="cancellationToken"></param>
+    /// <exception cref="OperationCanceledException"></exception>
+    private async Task CoolingDown(CancellationToken cancellationToken = default)
+    {
+        int cd = 15;
+        Globals.BotStatus = BotStatus.Cooling;
+        while (cd != 0)
+        {
+            _logger.LogWarning("遇到风控 还需冷却 {cd} 分钟", cd);
+            await Task.Delay(TimeSpan.FromMinutes(1), cancellationToken);
+            cd--;
+        }
+
+        Globals.BotStatus = null;
     }
 
     /// <summary>
