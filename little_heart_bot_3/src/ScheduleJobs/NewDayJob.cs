@@ -1,10 +1,10 @@
+using Coravel.Invocable;
 using little_heart_bot_3.Data;
 using Microsoft.EntityFrameworkCore;
-using Quartz;
 
 namespace little_heart_bot_3.ScheduleJobs;
 
-public class NewDayJob : IJob
+public class NewDayJob : IInvocable
 {
     private readonly IDbContextFactory<LittleHeartDbContext> _dbContextFactory;
 
@@ -13,7 +13,7 @@ public class NewDayJob : IJob
         _dbContextFactory = dbContextFactory;
     }
 
-    public async Task Execute(IJobExecutionContext context)
+    public async Task Invoke()
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
 
