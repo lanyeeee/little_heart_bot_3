@@ -45,9 +45,8 @@ public sealed class AppHostedService : BackgroundService
                     cd--;
                 }
             }
-            catch (OperationCanceledException ex)
+            catch (OperationCanceledException)
             {
-                _logger.LogWarning(ex, "AppHostedService正常退出");
                 return;
             }
             catch (Exception ex)
@@ -59,5 +58,11 @@ public sealed class AppHostedService : BackgroundService
                 await Task.Delay(5000, stoppingToken);
             }
         }
+    }
+
+    public override Task StopAsync(CancellationToken cancellationToken)
+    {
+        _logger.LogWarning("AppHostedService已退出");
+        return base.StopAsync(cancellationToken);
     }
 }

@@ -77,9 +77,8 @@ public sealed class BotHostedService : BackgroundService
             {
                 Globals.BotStatus = BotStatus.CookieExpired;
             }
-            catch (OperationCanceledException ex)
+            catch (OperationCanceledException)
             {
-                _logger.LogWarning(ex, "BotHostedService正常退出");
                 return;
             }
             catch (Exception ex)
@@ -91,6 +90,12 @@ public sealed class BotHostedService : BackgroundService
                 await Task.Delay(1000, stoppingToken);
             }
         }
+    }
+
+    public override Task StopAsync(CancellationToken cancellationToken)
+    {
+        _logger.LogWarning("BotHostedService已退出");
+        return base.StopAsync(cancellationToken);
     }
 
     /// <summary>
@@ -172,7 +177,8 @@ public sealed class BotHostedService : BackgroundService
     /// </exception>
     private async Task HandleIncomingPrivateMessageAsync(CancellationToken cancellationToken = default)
     {
-        IEnumerable<JsonNode?>? sessionList = await _botService.GetSessionListAsync(_botModel, cancellationToken);
+        IEnumerable<JsonNode?>? sessionList =
+            await _botService.GetSessionListAsync(_botModel, cancellationToken);
         if (sessionList is null)
         {
             return;
