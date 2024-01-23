@@ -182,6 +182,8 @@ public sealed class BotService : IBotService
         string content,
         CancellationToken cancellationToken = default)
     {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        db.Users.Attach(user);
         try
         {
             var response = await _apiService.SendPrivateMessageAsync(bot, user, content, cancellationToken);
@@ -194,11 +196,8 @@ public sealed class BotService : IBotService
             }
 
             //没有抛异常就说明发送成功了
-            await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
             user.ConfigTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds();
             user.ConfigNum++;
-            db.Users.Update(user);
-            await db.SaveChangesAsync(cancellationToken);
         }
         catch (HttpRequestException ex)
         {
@@ -218,6 +217,10 @@ public sealed class BotService : IBotService
                 user.Uid,
                 content);
         }
+        finally
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
     }
 
 
@@ -229,6 +232,8 @@ public sealed class BotService : IBotService
         CancellationToken cancellationToken = default)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        db.Users.Attach(user);
+
         try
         {
             switch (command)
@@ -276,7 +281,6 @@ public sealed class BotService : IBotService
         }
         finally
         {
-            db.Users.Update(user);
             await db.SaveChangesAsync(cancellationToken);
         }
     }

@@ -33,16 +33,15 @@ public abstract class MessageService : IMessageService
             return;
         }
 
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        db.Messages.Attach(message);
         try
         {
             var response = await _apiService.PostMessageAsync(message, cancellationToken);
 
-            await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
             message.Completed = true;
             message.Code = (int)response["code"]!;
             message.Response = response.ToJsonString(_options);
-            db.Messages.Update(message);
-            await db.SaveChangesAsync(cancellationToken);
 
             switch (message.Code)
             {
@@ -156,6 +155,10 @@ public abstract class MessageService : IMessageService
                 message.Uid,
                 message.TargetUid,
                 message.TargetName);
+        }
+        finally
+        {
+            await db.SaveChangesAsync(cancellationToken);
         }
     }
 

@@ -29,6 +29,8 @@ public abstract class TargetService : ITargetService
 
     public async Task StartAsync(TargetModel target, CancellationToken cancellationToken = default)
     {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        db.Targets.Attach(target);
         try
         {
             int? exp = await GetExpAsync(target, cancellationToken);
@@ -105,9 +107,8 @@ public abstract class TargetService : ITargetService
         }
         finally
         {
+            //TODO: 之后要精确判断是否完成
             target.Completed = true;
-            await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-            db.Targets.Update(target);
             await db.SaveChangesAsync(cancellationToken);
         }
     }
