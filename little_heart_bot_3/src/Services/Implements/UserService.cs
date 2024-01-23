@@ -35,7 +35,7 @@ public abstract class UserService : IUserService
     public async Task SendMessageAsync(UserModel user, CancellationToken cancellationToken = default)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-
+        db.Users.Attach(user);
 
         foreach (var message in user.Messages)
         {
@@ -52,10 +52,12 @@ public abstract class UserService : IUserService
             {
                 _logger.LogInformation("uid {Uid} 的cookie已过期", message.Uid);
                 user.CookieStatus = CookieStatus.Error;
-                db.Users.Update(user);
-                await db.SaveChangesAsync(cancellationToken);
                 //Cookie过期，不用再发了，直接返回，这个task正常结束
                 return;
+            }
+            finally
+            {
+                await db.SaveChangesAsync(cancellationToken);
             }
         }
     }
@@ -64,7 +66,7 @@ public abstract class UserService : IUserService
     public async Task WatchLiveAsync(UserModel user, CancellationToken cancellationToken = default)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-
+        db.Users.Attach(user);
         var tasks = new List<Task>();
 
         try
@@ -109,15 +111,15 @@ public abstract class UserService : IUserService
             //如果所有任务都完成了
             _logger.LogInformation("uid {Uid} 今日的所有任务已完成", user.Uid);
             user.Completed = true;
-            db.Users.Update(user);
-            await db.SaveChangesAsync(cancellationToken);
         }
         catch (LittleHeartException ex) when (ex.Reason == Reason.UserCookieExpired)
         {
             //Cookie过期，不用再看，直接返回，这个task正常结束
             _logger.LogInformation("uid {Uid} 的cookie已过期", user.Uid);
             user.CookieStatus = CookieStatus.Error;
-            db.Users.Update(user);
+        }
+        finally
+        {
             await db.SaveChangesAsync(cancellationToken);
         }
     }

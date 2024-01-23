@@ -130,6 +130,7 @@ public sealed class AppService : IAppService
     private async Task VerifyUserCookiesAsync(UserModel user, CancellationToken cancellationToken = default)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        db.Users.Attach(user);
         try
         {
             var response = await _apiService.VerifyCookiesAsync(user, cancellationToken);
@@ -173,7 +174,6 @@ public sealed class AppService : IAppService
         }
         finally
         {
-            db.Users.Update(user);
             await db.SaveChangesAsync(cancellationToken);
         }
     }
