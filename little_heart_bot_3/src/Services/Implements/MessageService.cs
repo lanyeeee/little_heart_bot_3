@@ -73,7 +73,7 @@ public abstract class MessageService : IMessageService
                 //可能是等级墙，也可能是全体禁言
                 case -403:
                     _logger.LogWithResponse(
-                        () => _logger.LogWarning("uid {Uid} 给 {TargetUid}({TargetName}) 发送弹幕失败，因为主播开启了禁言",
+                        () => _logger.LogInformation("uid {Uid} 给 {TargetUid}({TargetName}) 发送弹幕失败，因为主播开启了禁言",
                             message.Uid,
                             message.TargetUid,
                             message.TargetName),
@@ -82,7 +82,7 @@ public abstract class MessageService : IMessageService
                 //似乎跟Up主的身份有关系
                 case 11000:
                     _logger.LogWithResponse(
-                        () => _logger.LogWarning("uid {Uid} 给 {TargetUid}({TargetName}) 发送弹幕失败，原因未知",
+                        () => _logger.LogInformation("uid {Uid} 给 {TargetUid}({TargetName}) 发送弹幕失败，原因未知",
                             message.Uid,
                             message.TargetUid,
                             message.TargetName),
@@ -91,7 +91,7 @@ public abstract class MessageService : IMessageService
                 //发弹幕的频率过高
                 case 10030 or 10031:
                     _logger.LogWithResponse(
-                        () => _logger.LogWarning("uid {Uid} 给 {TargetUid}({TargetName}) 发送弹幕失败，因为发送弹幕的频率过高",
+                        () => _logger.LogInformation("uid {Uid} 给 {TargetUid}({TargetName}) 发送弹幕失败，因为发送弹幕的频率过高",
                             message.Uid,
                             message.TargetUid,
                             message.TargetName),
@@ -100,7 +100,7 @@ public abstract class MessageService : IMessageService
                 //用户已将主播拉黑
                 case 10023:
                     _logger.LogWithResponse(
-                        () => _logger.LogWarning("uid {Uid} 给 {TargetUid}({TargetName}) 发送弹幕失败，因为用户已将主播拉黑",
+                        () => _logger.LogInformation("uid {Uid} 给 {TargetUid}({TargetName}) 发送弹幕失败，因为用户已将主播拉黑",
                             message.Uid,
                             message.TargetUid,
                             message.TargetName),
@@ -109,7 +109,7 @@ public abstract class MessageService : IMessageService
                 //用户已在本房间被禁言
                 case 1003:
                     _logger.LogWithResponse(
-                        () => _logger.LogWarning("uid {Uid} 给 {TargetUid}({TargetName}) 发送弹幕失败，因为用户已在本房间被禁言",
+                        () => _logger.LogInformation("uid {Uid} 给 {TargetUid}({TargetName}) 发送弹幕失败，因为用户已在本房间被禁言",
                             message.Uid,
                             message.TargetUid,
                             message.TargetName),
@@ -118,7 +118,7 @@ public abstract class MessageService : IMessageService
                 //因主播隐私设置，暂无法发送弹幕
                 case 10024:
                     _logger.LogWithResponse(
-                        () => _logger.LogWarning("uid {Uid} 给 {TargetUid}({TargetName}) 发送弹幕失败，因为主播隐私设置，暂无法发送弹幕",
+                        () => _logger.LogInformation("uid {Uid} 给 {TargetUid}({TargetName}) 发送弹幕失败，因为主播隐私设置，暂无法发送弹幕",
                             message.Uid,
                             message.TargetUid,
                             message.TargetName),

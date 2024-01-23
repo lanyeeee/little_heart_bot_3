@@ -78,7 +78,7 @@ public abstract class TargetService : ITargetService
             JsonNode id = JsonNode.Parse(ePayload["id"])!;
             if ((int)id[0]! == 0 || (int)id[1]! == 0)
             {
-                _logger.LogWarning("uid {Uid} 在 {TargetUid}({TargetName}) 的任务完成，观看时长为0因为该直播间没有选择分区，无法观看",
+                _logger.LogInformation("uid {Uid} 在 {TargetUid}({TargetName}) 的任务完成，观看时长为0因为该直播间没有选择分区，无法观看",
                     target.Uid,
                     target.TargetUid,
                     target.TargetName);
@@ -499,11 +499,13 @@ public abstract class TargetService : ITargetService
             var data = await PostXAsync(target, xPayload, cancellationToken);
             if (data is null)
             {
-                _logger.LogError("因为 uid {Uid} 给 {TargetUid}({TargetName}) 发送X心跳包失败，停止继续发包，当前观看时长 {WatchedSeconds} 秒",
+                _logger.LogWarning(
+                    "uid {Uid} 给 {TargetUid}({TargetName}) 发送X心跳包失败，停止继续发包，观看时长 {WatchedSeconds} 秒，获得经验 {Exp}",
                     target.Uid,
                     target.TargetUid,
                     target.TargetName,
-                    target.WatchedSeconds);
+                    target.WatchedSeconds,
+                    target.Exp);
                 return;
             }
 
