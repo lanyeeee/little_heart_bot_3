@@ -35,7 +35,7 @@ builder.Services.AddHttpClient("global")
             }
         }));
 
-builder.Services.AddDbContextFactory<LittleHeartDbContext>(options =>
+builder.Services.AddPooledDbContextFactory<LittleHeartDbContext>(options =>
     {
         var connectionStringBuilder = new SqliteConnectionStringBuilder
         {
