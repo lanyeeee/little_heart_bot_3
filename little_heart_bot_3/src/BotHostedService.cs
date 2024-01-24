@@ -197,7 +197,7 @@ public sealed class BotHostedService : BackgroundService
             long timestamp = lastMsg.Count != 0 ? (long)lastMsg["timestamp"]! : 0;
 
             await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-            var user = await db.Users
+            var user = await db.Users.AsNoTracking()
                 .Include(u => u.Messages)
                 .Include(u => u.Targets)
                 .AsSplitQuery()
@@ -227,6 +227,7 @@ public sealed class BotHostedService : BackgroundService
             }
             else if (timestamp > user.ReadTimestamp) //发新消息的用户
             {
+                db.Attach(user);
                 IEnumerable<JsonNode?>? privateMessages =
                     await _botService.GetPrivateMessagesAsync(_botModel, user, cancellationToken);
 
