@@ -197,15 +197,14 @@ public sealed class BotHostedService : BackgroundService
             long timestamp = lastMsg.Count != 0 ? (long)lastMsg["timestamp"]! : 0;
 
             await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-            var user = await db.Users.AsNoTracking()
-                .Include(u => u.Messages)
-                .Include(u => u.Targets)
-                .AsSplitQuery()
-                .FirstOrDefaultAsync(u => u.Uid == uid, cancellationToken);
+            var readTimestamp = await db.Users.AsNoTracking()
+                .Where(u => u.Uid == uid)
+                .Select(u => (long?)u.ReadTimestamp)
+                .FirstOrDefaultAsync(cancellationToken);
 
-            if (user is null) //新用户
+            if (readTimestamp is null) //新用户
             {
-                user = new UserModel
+                var user = new UserModel
                 {
                     Uid = uid,
                     Cookie = string.Empty,
@@ -225,19 +224,23 @@ public sealed class BotHostedService : BackgroundService
                     await HandlePrivateMessagesAsync(user, 0, privateMessages, cancellationToken);
                 }
             }
-            else if (timestamp > user.ReadTimestamp) //发新消息的用户
+            else if (timestamp > readTimestamp) //发新消息的用户
             {
+                var user = await db.Users
+                    .Include(u => u.Targets)
+                    .Include(u => u.Messages)
+                    .AsSplitQuery()
+                    .FirstAsync(u => u.Uid == uid, cancellationToken);
                 db.Attach(user);
                 IEnumerable<JsonNode?>? privateMessages =
                     await _botService.GetPrivateMessagesAsync(_botModel, user, cancellationToken);
 
                 //只要成功获取用户的私信，无论这些私信是否成功处理，都只处理一次
-                long readTimestamp = user.ReadTimestamp;
                 user.ReadTimestamp = timestamp;
 
                 if (privateMessages is not null)
                 {
-                    await HandlePrivateMessagesAsync(user, readTimestamp, privateMessages, cancellationToken);
+                    await HandlePrivateMessagesAsync(user, readTimestamp.Value, privateMessages, cancellationToken);
                 }
             }
 
