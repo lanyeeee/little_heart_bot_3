@@ -17,6 +17,7 @@ using Serilog.Events;
 using Serilog.Formatting.Compact;
 
 var builder = Host.CreateApplicationBuilder(args);
+builder.Configuration.AddJsonFile("AppData/appsettings.json", optional: false, reloadOnChange: true);
 
 builder.Services.AddTransient<NewDayJob>();
 builder.Services.AddTransient<UpdateSignJob>();
@@ -57,7 +58,7 @@ builder.Services.AddSerilog(serilogConfig =>
                 .Filter.ByIncludingOnly(evt => evt.SourceContextEquals(typeof(BotHostedService)))
                 .MinimumLevel.Information()
                 .WriteTo.File(
-                    path: "logs/bot/bot-.clef",
+                    path: "AppData/logs/bot/bot-.clef",
                     rollingInterval: RollingInterval.Day,
                     fileSizeLimitBytes: 1 * 1024 * 1024,
                     rollOnFileSizeLimit: true,
@@ -71,7 +72,7 @@ builder.Services.AddSerilog(serilogConfig =>
                 .Filter.ByIncludingOnly(evt => evt.SourceContextEquals(typeof(AppHostedService)))
                 .MinimumLevel.Information()
                 .WriteTo.File(
-                    path: "logs/app/app-.clef",
+                    path: "AppData/logs/app/app-.clef",
                     rollingInterval: RollingInterval.Day,
                     fileSizeLimitBytes: 2 * 1024 * 1024,
                     rollOnFileSizeLimit: true,
