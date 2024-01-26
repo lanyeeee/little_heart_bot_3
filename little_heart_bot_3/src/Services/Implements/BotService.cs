@@ -399,15 +399,15 @@ public sealed class BotService : IBotService
         string parameter,
         CancellationToken cancellationToken = default)
     {
-        string[] pair = parameter.Split(" ", 2);
+        string[] pair = parameter.Split(" ", 2, StringSplitOptions.TrimEntries);
         if (pair.Length != 2)
         {
             return;
         }
 
-        string targetUidString = pair[0].Trim();
+        string targetUidString = pair[0];
         bool targetUidStringIsUid = long.TryParse(targetUidString, out var targetUid);
-        string content = pair[1].Trim();
+        string content = pair[1];
         int messageCount = user.Messages.Count;
         if (!targetUidStringIsUid || content.Length > 20 || messageCount > 50)
         {

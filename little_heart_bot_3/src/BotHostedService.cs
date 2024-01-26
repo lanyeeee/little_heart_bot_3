@@ -159,9 +159,9 @@ public sealed class BotHostedService : BackgroundService
 
             _logger.LogInformation("{Uid}：{Content}", user.Uid, content);
 
-            string[] pair = content.Split(" ", 2);
-            string command = pair[0].Trim();
-            string? parameter = pair.Length == 2 ? pair[1].Trim() : null;
+            string[] pair = content.Split(" ", 2, StringSplitOptions.TrimEntries);
+            string command = pair[0];
+            string? parameter = pair.ElementAtOrDefault(1);
 
             await _botService.HandleCommandAsync(_botModel, user, command, parameter, cancellationToken);
         }
