@@ -38,9 +38,12 @@
     </ItemGroup>
 
     <ItemGroup>
-        <Folder Include="database\"/>
-        <Folder Include="logs\app\"/>
-        <Folder Include="logs\bot\"/>
-        <Folder Include="logs\debug\"/>
+        <DatabaseFile Include="AppData/database/little_heart_bot_3.db"/>
     </ItemGroup>
+    <Target Name="CopyDatabaseFile" AfterTargets="AfterBuild">
+        <Copy SourceFiles="@(DatabaseFile)" DestinationFolder="$(TargetDir)/AppData/database"/>
+    </Target>
+    <Target Name="PublishDatabaseFile" AfterTargets="Publish">
+        <Copy SourceFiles="@(DatabaseFile)" DestinationFolder="$(PublishDir)/AppData/database"/>
+    </Target>
 </Project>
