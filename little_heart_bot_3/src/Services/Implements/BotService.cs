@@ -32,65 +32,21 @@ public sealed class BotService : IBotService
         BotModel bot,
         CancellationToken cancellationToken = default)
     {
-        try
+        var normalSessionList = await GetNormalSessionListAsync(bot, cancellationToken);
+        var blockedSessionList = await GetBlockedSessionListAsync(bot, cancellationToken);
+
+        if (normalSessionList is null)
         {
-            var normalResponse = await _apiService.GetNormalSessionListAsync(bot, cancellationToken);
-            if ((int)normalResponse["code"]! != 0)
-            {
-                _logger.LogWithResponse(
-                    () => _logger.LogError("获取普通的session_list失败"),
-                    normalResponse.ToJsonString(_options));
-
-                throw new LittleHeartException(Reason.RiskControl);
-            }
-
-            var normalSessionList = (JsonArray?)normalResponse["data"]!["session_list"];
-
-            var blockedResponse = await _apiService.GetBlockedSessionListAsync(bot, cancellationToken);
-            if ((int)blockedResponse["code"]! != 0)
-            {
-                _logger.LogWithResponse(
-                    () => _logger.LogError("获取被屏蔽的session_list失败"),
-                    blockedResponse.ToJsonString(_options));
-
-                throw new LittleHeartException(Reason.RiskControl);
-            }
-
-            var blockedSessionList = (JsonArray?)blockedResponse["data"]!["session_list"];
-
-            if (normalSessionList is null)
-            {
-                return blockedSessionList;
-            }
-
-            if (blockedSessionList is null)
-            {
-                return normalSessionList;
-            }
-
-            //如果两个都不为空
-            return normalSessionList.Union(blockedSessionList);
+            return blockedSessionList;
         }
-        catch (HttpRequestException ex)
+
+        if (blockedSessionList is null)
         {
-            _logger.LogError(ex,
-                "获取 session_list 时遇到 HttpRequestException 异常，重试多次后依然失败");
-            throw new LittleHeartException(ex.Message, ex, Reason.RiskControl);
+            return normalSessionList;
         }
-        catch (LittleHeartException)
-        {
-            throw;
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogCritical(ex,
-                "获取 session_list 时出现预料之外的错误");
-            return null;
-        }
+
+        //如果两个都不为空
+        return normalSessionList.Union(blockedSessionList);
     }
 
     public async Task<IEnumerable<JsonNode?>?> GetPrivateMessagesAsync(
@@ -285,6 +241,125 @@ public sealed class BotService : IBotService
         }
     }
 
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="bot"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    /// <exception cref="OperationCanceledException"></exception>
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.RiskControl
+    /// <br/>Reason.BotCookieExpired
+    /// </exception>
+    private async Task<IEnumerable<JsonNode?>?> GetNormalSessionListAsync(
+        BotModel bot,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _apiService.GetNormalSessionListAsync(bot, cancellationToken);
+            int code = (int)response["code"]!;
+            if (code == -101)
+            {
+                _logger.LogError("小心心bot的Cookie已过期");
+                throw new LittleHeartException(Reason.BotCookieExpired);
+            }
+
+            if (code != 0)
+            {
+                _logger.LogWithResponse(
+                    () => _logger.LogError("获取普通的 session_list 失败"),
+                    response.ToJsonString(_options));
+
+                throw new LittleHeartException(Reason.RiskControl);
+            }
+
+            var sessionList = (JsonArray?)response["data"]!["session_list"];
+
+            return sessionList;
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex,
+                "获取普通的 session_list 时遇到 HttpRequestException 异常，重试多次后依然失败");
+            throw new LittleHeartException(ex.Message, ex, Reason.RiskControl);
+        }
+        catch (LittleHeartException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogCritical(ex,
+                "获取普通的 session_list 时出现预料之外的错误");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="bot"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    /// <exception cref="OperationCanceledException"></exception>
+    /// <exception cref="LittleHeartException">
+    /// <br/>Reason.RiskControl
+    /// <br/>Reason.BotCookieExpired
+    /// </exception>
+    private async Task<IEnumerable<JsonNode?>?> GetBlockedSessionListAsync(
+        BotModel bot,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _apiService.GetBlockedSessionListAsync(bot, cancellationToken);
+            int code = (int)response["code"]!;
+            if (code == -101)
+            {
+                _logger.LogError("小心心bot的Cookie已过期");
+                throw new LittleHeartException(Reason.BotCookieExpired);
+            }
+
+            if (code != 0)
+            {
+                _logger.LogWithResponse(
+                    () => _logger.LogError("获取被屏蔽的 session_list 失败"),
+                    response.ToJsonString(_options));
+
+                throw new LittleHeartException(Reason.RiskControl);
+            }
+
+            var sessionList = (JsonArray?)response["data"]!["session_list"];
+
+            return sessionList;
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex,
+                "获取被屏蔽的 session_list 时遇到 HttpRequestException 异常，重试多次后依然失败");
+            throw new LittleHeartException(ex.Message, ex, Reason.RiskControl);
+        }
+        catch (LittleHeartException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogCritical(ex,
+                "获取被屏蔽的 session_list 时出现预料之外的错误");
+            return null;
+        }
+    }
 
     #region CommandHandler
 
