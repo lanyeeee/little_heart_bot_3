@@ -15,6 +15,7 @@ public interface IBotService
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
     /// <br/>Reason.RiskControl
+    /// <br/>Reason.BotCookieExpired
     /// </exception>
     public Task<IEnumerable<JsonNode?>?> GetSessionListAsync(
         BotModel bot,

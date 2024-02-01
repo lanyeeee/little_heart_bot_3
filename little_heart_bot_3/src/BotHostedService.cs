@@ -174,6 +174,7 @@ public sealed class BotHostedService : BackgroundService
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="LittleHeartException">
     /// <br/>Reason.RiskControl
+    /// <br/>Reason.BotCookieExpired
     /// </exception>
     private async Task HandleIncomingPrivateMessageAsync(CancellationToken cancellationToken = default)
     {
