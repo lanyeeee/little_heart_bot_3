@@ -45,8 +45,9 @@ public sealed class AppHostedService : BackgroundService
                     cd--;
                 }
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException ex) when (stoppingToken.IsCancellationRequested)
             {
+                _logger.LogWarning(ex, "AppHostedService的ExecuteAsync已取消");
                 return;
             }
             catch (Exception ex)
