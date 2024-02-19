@@ -23,8 +23,7 @@ public abstract class ApiService : IApiService
         _httpClient = httpclientFactory.CreateClient("global");
     }
 
-    public async Task<JsonNode> VerifyCookiesAsync(UserModel user,
-        CancellationToken cancellationToken = default)
+    public async Task<JsonNode> VerifyCookiesAsync(UserModel user, CancellationToken cancellationToken = default)
     {
         var requestMessage = new HttpRequestMessage
         {
@@ -44,7 +43,8 @@ public abstract class ApiService : IApiService
         return (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
     }
 
-    public async Task<JsonNode> GetPrivateMessagesAsync(BotModel bot,
+    public async Task<JsonNode> GetPrivateMessagesAsync(
+        BotModel bot,
         UserModel user,
         CancellationToken cancellationToken = default)
     {
@@ -68,7 +68,9 @@ public abstract class ApiService : IApiService
         return (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
     }
 
-    public async Task<JsonNode> UpdateSignAsync(BotModel bot, string sign,
+    public async Task<JsonNode> UpdateSignAsync(
+        BotModel bot,
+        string sign,
         CancellationToken cancellationToken = default)
     {
         var payload = new Dictionary<string, string?>
@@ -95,7 +97,8 @@ public abstract class ApiService : IApiService
         return (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
     }
 
-    public async Task<JsonNode> SendPrivateMessageAsync(BotModel bot,
+    public async Task<JsonNode> SendPrivateMessageAsync(
+        BotModel bot,
         UserModel user,
         string content,
         CancellationToken cancellationToken = default)
@@ -134,8 +137,7 @@ public abstract class ApiService : IApiService
         return (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
     }
 
-    public async Task<JsonNode> GetNormalSessionListAsync(BotModel bot,
-        CancellationToken cancellationToken = default)
+    public async Task<JsonNode> GetNormalSessionListAsync(BotModel bot, CancellationToken cancellationToken = default)
     {
         //普通的私信session
         HttpRequestMessage requestMessage = new HttpRequestMessage
@@ -156,8 +158,7 @@ public abstract class ApiService : IApiService
         return (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
     }
 
-    public async Task<JsonNode> GetBlockedSessionListAsync(BotModel bot,
-        CancellationToken cancellationToken = default)
+    public async Task<JsonNode> GetBlockedSessionListAsync(BotModel bot, CancellationToken cancellationToken = default)
     {
         //被屏蔽的私信session
         HttpRequestMessage requestMessage = new HttpRequestMessage
@@ -271,8 +272,7 @@ public abstract class ApiService : IApiService
         return (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
     }
 
-    public async Task<JsonNode> GetEPayloadAsync(TargetModel target,
-        CancellationToken cancellationToken = default)
+    public async Task<JsonNode> GetEPayloadAsync(TargetModel target, CancellationToken cancellationToken = default)
     {
         var uri = new Uri(
             $"https://api.live.bilibili.com/xlive/web-room/v1/index/getInfoByRoom?&room_id={target.RoomId}");
@@ -292,7 +292,8 @@ public abstract class ApiService : IApiService
         return (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
     }
 
-    public async Task<JsonNode> PostEAsync(TargetModel target,
+    public async Task<JsonNode> PostEAsync(
+        TargetModel target,
         Dictionary<string, string> ePayload,
         CancellationToken cancellationToken = default)
     {
@@ -315,7 +316,8 @@ public abstract class ApiService : IApiService
         return (await responseMessage.Content.ReadFromJsonAsync<JsonNode>(_options, cancellationToken))!;
     }
 
-    public async Task<JsonNode> PostXAsync(TargetModel target,
+    public async Task<JsonNode> PostXAsync(
+        TargetModel target,
         Dictionary<string, string> payload,
         CancellationToken cancellationToken = default)
     {
@@ -339,7 +341,8 @@ public abstract class ApiService : IApiService
     }
 
 
-    public async Task<JsonNode> GetOtherUserInfoAsync(UserModel user,
+    public async Task<JsonNode> GetOtherUserInfoAsync(
+        UserModel user,
         long uid,
         CancellationToken cancellationToken = default)
     {

@@ -66,9 +66,7 @@ public interface IApiService
     /// <returns></returns>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="HttpRequestException"></exception>
-    public Task<JsonNode> GetNormalSessionListAsync(
-        BotModel bot,
-        CancellationToken cancellationToken = default);
+    public Task<JsonNode> GetNormalSessionListAsync(BotModel bot, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 获取被屏蔽的会话列表
@@ -78,9 +76,7 @@ public interface IApiService
     /// <returns></returns>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="HttpRequestException"></exception>
-    public Task<JsonNode> GetBlockedSessionListAsync(
-        BotModel bot,
-        CancellationToken cancellationToken = default);
+    public Task<JsonNode> GetBlockedSessionListAsync(BotModel bot, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 点赞
@@ -120,9 +116,7 @@ public interface IApiService
     /// <returns></returns>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="HttpRequestException"></exception>
-    public Task<JsonNode> GetEPayloadAsync(
-        TargetModel target,
-        CancellationToken cancellationToken = default);
+    public Task<JsonNode> GetEPayloadAsync(TargetModel target, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 发送E心跳包

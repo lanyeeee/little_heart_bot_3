@@ -32,7 +32,9 @@ public interface IBotService
     /// <exception cref="LittleHeartException">
     /// <br/>Reason.RiskControl
     /// </exception>
-    public Task<IEnumerable<JsonNode?>?> GetPrivateMessagesAsync(BotModel bot, UserModel user,
+    public Task<IEnumerable<JsonNode?>?> GetPrivateMessagesAsync(
+        BotModel bot,
+        UserModel user,
         CancellationToken cancellationToken = default);
 
     /// <summary>
