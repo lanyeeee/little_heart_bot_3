@@ -13,6 +13,7 @@ public sealed class BotHostedService : BackgroundService
 {
     private readonly ILogger _logger;
     private readonly IBotService _botService;
+    private readonly IEmailService _emailService;
     private readonly IDbContextFactory<LittleHeartDbContext> _dbContextFactory;
     private readonly IConfiguration _configuration;
 
@@ -22,6 +23,8 @@ public sealed class BotHostedService : BackgroundService
     public BotHostedService(
         ILogger<BotHostedService> logger,
         IBotService botService,
+        [FromKeyedServices("bot:EmailService")]
+        IEmailService emailService,
         IDbContextFactory<LittleHeartDbContext> dbContextFactory,
         IConfiguration configuration)
     {
@@ -29,6 +32,7 @@ public sealed class BotHostedService : BackgroundService
         _botService = botService;
         _dbContextFactory = dbContextFactory;
         _configuration = configuration;
+        _emailService = emailService;
         _botStatusSemaphore = new SemaphoreSlim(0, 1);
         ChangeToken.OnChange(
             () => _configuration.GetReloadToken(),
@@ -84,7 +88,8 @@ public sealed class BotHostedService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogCritical(ex, "遇到了意料之外的错误");
+                _logger.LogCritical(ex, "出现预料之外的错误");
+                await _emailService.SendEmailAsync("小心心bot出现预料之外的错误", ex.ToString());
             }
             finally
             {

@@ -10,16 +10,20 @@ public sealed class AppHostedService : BackgroundService
 {
     private readonly ILogger _logger;
     private readonly IAppService _appService;
+    private readonly IEmailService _emailService;
     private readonly IDbContextFactory<LittleHeartDbContext> _dbContextFactory;
 
     public AppHostedService(
         ILogger<AppHostedService> logger,
         IAppService appService,
+        [FromKeyedServices("app:EmailService")]
+        IEmailService emailService,
         IDbContextFactory<LittleHeartDbContext> dbContextFactory)
     {
         _logger = logger;
-        _dbContextFactory = dbContextFactory;
         _appService = appService;
+        _emailService = emailService;
+        _dbContextFactory = dbContextFactory;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -53,6 +57,7 @@ public sealed class AppHostedService : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogCritical(ex, "出现预料之外的错误");
+                await _emailService.SendEmailAsync("小心心bot出现预料之外的错误", ex.ToString());
             }
             finally
             {
