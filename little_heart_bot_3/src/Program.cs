@@ -122,6 +122,9 @@ builder.Services.AddKeyedSingleton<ITargetService, AppTargetService>("app:Target
 //UserService
 builder.Services.AddKeyedSingleton<IUserService, BotUserService>("bot:UserService");
 builder.Services.AddKeyedSingleton<IUserService, AppUserService>("app:UserService");
+//EmailService
+builder.Services.AddKeyedSingleton<IEmailService, AppEmailService>("bot:EmailService");
+builder.Services.AddKeyedSingleton<IEmailService, BotEmailService>("app:EmailService");
 
 builder.Services.AddHostedService<BotHostedService>();
 builder.Services.AddHostedService<AppHostedService>();
