@@ -350,9 +350,13 @@ public abstract class TargetService : ITargetService
         {
             throw;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
+        }
+        catch (OperationCanceledException ex) when (ex.InnerException is TimeoutException)
+        {
+            return null;
         }
         catch (JsonException ex)
         {
