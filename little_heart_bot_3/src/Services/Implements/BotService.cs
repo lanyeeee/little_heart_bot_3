@@ -289,9 +289,13 @@ public sealed class BotService : IBotService
         {
             throw;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
+        }
+        catch (OperationCanceledException ex) when (ex.InnerException is TimeoutException)
+        {
+            return null;
         }
         catch (Exception ex)
         {
