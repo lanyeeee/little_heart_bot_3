@@ -55,6 +55,8 @@ public sealed class BotHostedService : BackgroundService
                 if (Globals.BotStatus is BotStatus.CookieExpired)
                 {
                     _logger.LogError("Bot的Cookie已过期，Bot主线程阻塞，直到管理员手动更新Cookie到appsettings.json");
+                    await _emailService.SendEmailAsync("小心心bot的Cookie已过期",
+                        "Bot的Cookie已过期，Bot主线程阻塞，直到管理员手动更新Cookie到appsettings.json");
 
                     if (_botStatusSemaphore.CurrentCount == 1)
                     {
