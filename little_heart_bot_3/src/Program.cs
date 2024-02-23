@@ -1,4 +1,5 @@
-﻿using System.Text.Encodings.Web;
+﻿using System.Reflection;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Coravel;
 using little_heart_bot_3;
@@ -17,7 +18,9 @@ using Serilog.Events;
 using Serilog.Formatting.Compact;
 
 var builder = Host.CreateApplicationBuilder(args);
+
 builder.Configuration.AddJsonFile("AppData/appsettings.json", optional: false, reloadOnChange: true);
+builder.Configuration.AddUserSecrets(Assembly.GetExecutingAssembly(), optional: true);
 
 builder.Services.AddTransient<NewDayJob>();
 builder.Services.AddTransient<UpdateSignJob>();
@@ -93,7 +96,7 @@ builder.Services.AddSerilog(serilogConfig =>
                 debugConfig
                     .MinimumLevel.Debug()
                     .WriteTo.File(
-                        path: "logs/debug/debug.clef",
+                        path: "AppData/logs/debug/debug.clef",
                         rollingInterval: RollingInterval.Infinite,
                         fileSizeLimitBytes: 100 * 1024 * 1024,
                         rollOnFileSizeLimit: true,
