@@ -2,91 +2,68 @@
 
 ## 前提
 
-- 操作系统：linux(目前只支持amd和arm)
-- 装好docker，且docker能正常使用
+装好docker，且docker能正常使用
 
 ## 开始部署
 
-### 1.拉取镜像
+### 1.填写账号信息
 
-如果你是amd架构
+修改配置文件`little_heart_bot_3/AppData/appsettings.json`
 
+```json
+{
+  "Sqlite": {
+    "DataSource": "AppData/database/little_heart_bot_3.db"
+  },
+  "Bot": {
+    "uid": 10086,
+    "cookie": "账号的cookie",
+    "dev_id": "这个怎么填看下面"
+  },
+  "Email": {
+    "from": "10086@qq.com",
+    "to": "10086@qq.com",
+    "auth": "qq邮箱的授权码"
+  }
+}
 ```
-docker pull lanyeeee/little_heart_bot_3:amd
-```
-
-如果你是arm架构
-
-```
-docker pull lanyeeee/little_heart_bot_3:arm
-```
-
-### 2.启动容器
-
-如果你是amd架构
-
-```
-docker run -it lanyeeee/little_heart_bot_3:amd
-```
-
-如果你是arm架构
-
-```
-docker run -it lanyeeee/little_heart_bot_3:arm
-```
-
-**提醒一下，容器内的ssh和mysql端口都是默认的，需要使用请自行映射**
-
-### 3.填写账号信息
-
-**mysql的密码是 root**
-
-```
-mysql -proot
-
-use little_heart_bot_3;
-
-insert into bot_table(uid) values(自己填);
-
-update bot_table set dev_id = 自己填;
-
-update bot_table set cookie = 自己填;
-
-update bot_table set csrf = 自己填;
-
-quit;
-```  
 
 **关于dev_id**  
 随便找个人私聊，找send_msg包，payload里有一项msg[dev_id]，里边的内容就是dev_id
 
-**关于csrf**  
-cookie里找bili_jct，它的值就是csrf，长度为32
+**关于Email**  
+非必填项，正确填写后，能在发生预料之外错误或Cookie过期时发通知邮件
 
-**务必确保所填信息是正确的**
+### 2.构建docker镜像
 
-### 4.编译并运行小心心bot
+在项目根目录下
 
 ```
-cd /home/little_heart_bot_3
-
-sh start.sh
+docker build . -t little_heart_bot_3
 ```
 
-### 5.编译完成后查看是否正确运行
+### 3.启动容器
 
-``` 
-ps
+如果你的系统是`Linux`在项目根目录下，使用以下命令来启动容器
+
+```
+docker run -d -v $(pwd)/little_heart_bot_3/AppData:/app/AppData little_heart_bot_3:latest
 ```
 
-609 pts/1 00:00:00 bash  
-2396 pts/1 00:00:21 dotnet  
-2541 pts/1 00:00:15 dotnet  
-2671 pts/1 00:00:06 little_heart_bo  
-2805 pts/1 00:00:00 ps
+如果你的系统是`Windows`，在项目根目录下，使用以下命令来启动容器
 
-输出类似这样就行，包含 dotnet 和 little_heart... 即可
+```
+docker run -d -v $pwd/little_heart_bot_3/AppData:/app/AppData little_heart_bot_3:latest
+```
 
-## 日志
 
-保存在/home/little_heart_bot_3/log里
+
+## 数据
+
+
+如果你按照上面的命令启动容器，那么数据库、日志、配置文件都保存在主机的`little_heart_bot_3/AppData`中。
+
+
+
+
+
