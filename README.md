@@ -7,16 +7,16 @@
 
 # 简介
 
-部署成功后你也能成为小心心bot
+这是小心心bot的源码，部署成功后可以使某个账号具备小心心bot的功能
 
 # 部署方式
 
-- [Docker 部署(推荐)](md/docker.md)
-- [直接部署](md/direct.md)
+- [Docker 部署](md/docker.md)
+- [直接部署（ 需要.Net 8 SDK）](md/direct.md)
 
 # 感谢
 
-- [bilibili-pcheartbeat](https://github.com/lkeme/bilibili-pcheartbeat) 小心心bot依赖这个库对直播心跳包进行解密
+- [bilibili-pcheartbeat](https://github.com/lkeme/bilibili-pcheartbeat) 小心心bot的直播心跳包加密算法是从这个库借鉴的
 
 # 注意
 
@@ -24,4 +24,4 @@
 
 # License 许可证
 
-[GPL v3](LICENSE)
+[MIT](LICENSE)
