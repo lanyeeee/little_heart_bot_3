@@ -67,7 +67,6 @@ public abstract class UserService : IUserService
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         db.Users.Attach(user);
-        var tasks = new List<Task>();
 
         try
         {
@@ -81,25 +80,8 @@ public abstract class UserService : IUserService
                 }
 
                 // 启动新的观看任务
-                tasks.Add(_targetService.StartAsync(target, cancellationToken));
+                await _targetService.StartAsync(target, cancellationToken);
                 await Task.Delay(500, cancellationToken);
-
-                // 如果同时运行的任务数量达到上限，等待任意任务完成
-                while (tasks.Count >= 10)
-                {
-                    Task completedTask = await Task.WhenAny(tasks);
-                    tasks.Remove(completedTask);
-                    await completedTask;
-                }
-            }
-
-            // 等待所有任务完成
-            while (tasks.Count != 0)
-            {
-                var completedTask = await Task.WhenAny(tasks);
-                tasks.Remove(completedTask);
-
-                await completedTask;
             }
 
             //如果有任何一个任务未完成
