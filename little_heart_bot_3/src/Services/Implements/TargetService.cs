@@ -145,6 +145,7 @@ public abstract class TargetService : ITargetService
                         {
                             "device", "[\"AUTO8716422349901853\",\"3E739D10D-174A-10DD5-61028-A5E3625BE56450692infoc\"]"
                         },
+                        { "ruid", target.TargetUid.ToString() },
                         { "ts", DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString() },
                         { "is_patch", "0" },
                         { "heart_beat", "[]" },
@@ -584,6 +585,7 @@ public abstract class TargetService : ITargetService
             ["s"] = LiveHeartbeatEncryptor.Encrypt(data, rules, key),
             ["id"] = ePayload["id"],
             ["device"] = ePayload["device"],
+            ["ruid"] = ePayload["ruid"],
             ["ets"] = heartbeatData["timestamp"]!.GetValue<long>().ToString(),
             ["benchmark"] = key,
             ["time"] = heartbeatData["heartbeat_interval"]!.GetValue<long>().ToString(),
