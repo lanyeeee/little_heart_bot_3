@@ -150,15 +150,12 @@ public interface IApiService
     /// <summary>
     /// 通过user去获取uid对应用户的信息
     /// </summary>
-    /// <param name="user"></param>
+    /// <param name="bot"></param>
     /// <param name="uid"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     /// <exception cref="OperationCanceledException"></exception>
     /// <exception cref="HttpRequestException"></exception>
     /// <exception cref="FormatException"></exception>
-    public Task<JsonNode> GetOtherUserInfoAsync(
-        UserModel user,
-        long uid,
-        CancellationToken cancellationToken = default);
+    public Task<JsonNode> GetOtherUserInfoAsync(BotModel bot, long uid, CancellationToken cancellationToken = default);
 }
