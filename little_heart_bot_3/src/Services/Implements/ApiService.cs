@@ -342,7 +342,7 @@ public abstract class ApiService : IApiService
 
 
     public async Task<JsonNode> GetOtherUserInfoAsync(
-        UserModel user,
+        BotModel bot,
         long uid,
         CancellationToken cancellationToken = default)
     {
@@ -359,13 +359,12 @@ public abstract class ApiService : IApiService
                     "user-agent",
                     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36"
                 },
-                { "cookie", user.Cookie }
+                { "cookie", bot.Cookie }
             },
         }.SetRetryCallback((outcome, retryDelay, retryCount) =>
         {
             _logger.LogDebug(outcome.Exception,
-                "uid {Uid} 获取 {TargetUid} 的用户数据遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
-                user.Uid,
+                "获取 {Uid} 的用户数据遇到异常，准备在 {RetryDelay} 秒后进行第 {RetryCount} 次重试",
                 uid,
                 retryDelay.TotalSeconds,
                 retryCount);
