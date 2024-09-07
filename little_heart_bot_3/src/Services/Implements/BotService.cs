@@ -187,9 +187,6 @@ public sealed class BotService : IBotService
         string? parameter,
         CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        db.Users.Attach(user);
-
         try
         {
             switch (command)
@@ -234,10 +231,6 @@ public sealed class BotService : IBotService
                 "处理uid {Uid} 的命令时遇到 HttpRequestException 异常，重试多次后依然失败",
                 user.Uid);
             throw new LittleHeartException(Reason.RiskControl);
-        }
-        finally
-        {
-            await db.SaveChangesAsync(cancellationToken);
         }
     }
 
