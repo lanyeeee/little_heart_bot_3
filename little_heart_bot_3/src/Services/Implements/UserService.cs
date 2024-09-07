@@ -70,27 +70,19 @@ public abstract class UserService : IUserService
 
         try
         {
-            foreach (var target in user.Targets)
+            var target = user.Targets.FirstOrDefault(t => !t.Completed);
+            if (target is not null)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                // 已完成的任务就跳过
-                if (target.Completed)
-                {
-                    continue;
-                }
-
-                // 启动新的观看任务
                 await _targetService.StartAsync(target, cancellationToken);
-                await Task.Delay(500, cancellationToken);
             }
 
-            //如果有任何一个任务未完成
+            //如果有任何一个目标未完成
             if (user.Targets.Exists(t => !t.Completed))
             {
                 return;
             }
 
-            //如果所有任务都完成了
+            //如果所有目标都完成了
             _logger.LogInformation("uid {Uid} 今日的所有任务已完成", user.Uid);
             user.Completed = true;
         }
