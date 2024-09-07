@@ -473,8 +473,8 @@ public abstract class TargetService : ITargetService
 
     private bool IsCompleted(TargetModel target)
     {
-        //只有经验>=1500或观看时长>=75分钟才判定为完成
-        return target is not { Exp: < 1500, WatchedSeconds: < 75 * 60 };
+        //只有经验>=1500或观看时长>=30分钟才判定为完成
+        return target.Exp >= 1500 || target.WatchedSeconds >= 30 * 60;
     }
 
     /// <summary>

@@ -93,6 +93,58 @@ public sealed class BotService : IBotService
         }
     }
 
+    public async Task<JsonNode?> GetOtherUserInfoAsync(
+        BotModel bot,
+        long uid,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _apiService.GetOtherUserInfoAsync(bot, uid, cancellationToken);
+
+            int code = (int)response["code"]!;
+            switch (code)
+            {
+                case 0:
+                    return response["data"];
+                case -400 or -404:
+                    _logger.LogError(new Exception(response.ToJsonString(_options)),
+                        "获取 {Uid} 的用户数据失败", uid);
+                    return null;
+                case -352:
+                    _logger.LogWarning(new Exception(response.ToJsonString(_options)),
+                        "获取 {Uid} 的用户数据失败，cookie已过期", uid);
+                    throw new LittleHeartException(Reason.UserCookieExpired);
+                default:
+                    _logger.LogError(new Exception(response.ToJsonString(_options)),
+                        "获取 {Uid} 的用户数据失败", uid);
+                    throw new LittleHeartException(Reason.RiskControl);
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "获取 {Uid} 的用户数据出现 HttpRequestException 异常，重试多次后依旧发生异常", uid);
+            throw new LittleHeartException(ex.Message, ex, Reason.RiskControl);
+        }
+        catch (FormatException)
+        {
+            throw new LittleHeartException(Reason.UserCookieExpired);
+        }
+        catch (LittleHeartException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            _logger.LogCritical(e, "获取 {Uid} 的用户数据时出现意料之外的异常", uid);
+            return null;
+        }
+    }
+
     public async Task UpdateSignAsync(BotModel bot, string sign, CancellationToken cancellationToken = default)
     {
         try
@@ -187,21 +239,18 @@ public sealed class BotService : IBotService
         string? parameter,
         CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        db.Users.Attach(user);
-
         try
         {
             switch (command)
             {
                 case "/target_set" when parameter is not null:
-                    await HandleTargetSetCommandAsync(user, parameter, cancellationToken);
+                    await HandleTargetSetCommandAsync(bot, user, parameter, cancellationToken);
                     break;
                 case "/target_delete" when parameter is not null:
                     HandleTargetDeleteCommand(user, parameter);
                     break;
                 case "/message_set" when parameter is not null:
-                    await HandleMessageSetCommandAsync(user, parameter, cancellationToken);
+                    await HandleMessageSetCommandAsync(bot, user, parameter, cancellationToken);
                     break;
                 case "/message_delete" when parameter is not null:
                     HandleMessageDeleteCommand(user, parameter);
@@ -234,10 +283,6 @@ public sealed class BotService : IBotService
                 "处理uid {Uid} 的命令时遇到 HttpRequestException 异常，重试多次后依然失败",
                 user.Uid);
             throw new LittleHeartException(Reason.RiskControl);
-        }
-        finally
-        {
-            await db.SaveChangesAsync(cancellationToken);
         }
     }
 
@@ -370,6 +415,7 @@ public sealed class BotService : IBotService
     /// <summary>
     /// 
     /// </summary>
+    /// <param name="bot"></param>
     /// <param name="user"></param>
     /// <param name="parameter"></param>
     /// <param name="cancellationToken"></param>
@@ -379,6 +425,7 @@ public sealed class BotService : IBotService
     /// <br/>Reason.UserCookieExpired
     /// </exception>
     private async Task HandleTargetSetCommandAsync(
+        BotModel bot,
         UserModel user,
         string parameter,
         CancellationToken cancellationToken = default)
@@ -389,7 +436,7 @@ public sealed class BotService : IBotService
             return;
         }
 
-        JsonNode? data = await _userService.GetOtherUserInfoAsync(user, targetUid, cancellationToken);
+        JsonNode? data = await GetOtherUserInfoAsync(bot, targetUid, cancellationToken);
         if (data?["live_room"] is null)
         {
             return;
@@ -465,6 +512,7 @@ public sealed class BotService : IBotService
     /// <summary>
     /// 
     /// </summary>
+    /// <param name="bot"></param>
     /// <param name="user"></param>
     /// <param name="parameter"></param>
     /// <param name="cancellationToken"></param>
@@ -474,6 +522,7 @@ public sealed class BotService : IBotService
     /// <br/>Reason.UserCookieExpired
     /// </exception>
     private async Task HandleMessageSetCommandAsync(
+        BotModel bot,
         UserModel user,
         string parameter,
         CancellationToken cancellationToken = default)
@@ -503,7 +552,7 @@ public sealed class BotService : IBotService
         }
         else
         {
-            JsonNode? data = await _userService.GetOtherUserInfoAsync(user, targetUid, cancellationToken);
+            JsonNode? data = await GetOtherUserInfoAsync(bot, targetUid, cancellationToken);
             if (data is null)
             {
                 return;

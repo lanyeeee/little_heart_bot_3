@@ -29,22 +29,6 @@ public interface IUserService
     /// </exception>
     public Task WatchLiveAsync(UserModel user, CancellationToken cancellationToken = default);
 
-
-    /// <summary>
-    /// 通过user去获取uid对应用户的详细信息
-    /// </summary>
-    /// <param name="user"></param>
-    /// <param name="uid"></param>
-    /// <param name="cancellationToken"></param>
-    /// <returns></returns>
-    /// <exception cref="OperationCanceledException"></exception>
-    /// <exception cref="LittleHeartException">
-    /// <br/>Reason.RiskControl
-    /// <br/>Reason.UserCookieExpired
-    /// </exception>
-    public Task<JsonNode?> GetOtherUserInfoAsync(UserModel user, long uid,
-        CancellationToken cancellationToken = default);
-
     /// <summary>
     /// 对应/config_all命令
     /// </summary>
