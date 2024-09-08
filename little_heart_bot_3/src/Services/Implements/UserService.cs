@@ -37,7 +37,7 @@ public abstract class UserService : IUserService
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         db.Users.Attach(user);
 
-        foreach (var message in user.Messages)
+        foreach (var message in user.Messages.Where(m => m is { Completed: false, Code: 0 }))
         {
             try
             {
