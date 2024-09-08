@@ -47,13 +47,13 @@ docker build . -t little_heart_bot_3
 如果你的系统是`Linux`在项目根目录下，使用以下命令来启动容器
 
 ```
-docker run -d -v $(pwd)/little_heart_bot_3/AppData:/app/AppData little_heart_bot_3:latest
+docker run -d -e TZ=Asia/Shanghai -v $(pwd)/little_heart_bot_3/AppData:/app/AppData little_heart_bot_3:latest
 ```
 
 如果你的系统是`Windows`，在项目根目录下，使用以下命令来启动容器
 
 ```
-docker run -d -v $pwd/little_heart_bot_3/AppData:/app/AppData little_heart_bot_3:latest
+docker run -d -e TZ=Asia/Shanghai -v $pwd/little_heart_bot_3/AppData:/app/AppData little_heart_bot_3:latest
 ```
 
 

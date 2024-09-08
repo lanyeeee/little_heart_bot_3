@@ -42,8 +42,8 @@ public abstract class UserService : IUserService
             try
             {
                 //发弹幕之前先点个赞
-                await _messageService.ThumbsUpAsync(message, cancellationToken);
-                await Task.Delay(100, cancellationToken);
+                // await _messageService.ThumbsUpAsync(message, cancellationToken);
+                // await Task.Delay(100, cancellationToken);
 
                 await _messageService.SendAsync(message, cancellationToken);
                 await Task.Delay(900, cancellationToken);
