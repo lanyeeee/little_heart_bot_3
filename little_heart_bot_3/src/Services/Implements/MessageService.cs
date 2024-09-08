@@ -28,11 +28,6 @@ public abstract class MessageService : IMessageService
 
     public async Task SendAsync(MessageModel message, CancellationToken cancellationToken = default)
     {
-        if (message.Completed || message.Code != 0)
-        {
-            return;
-        }
-
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         db.Messages.Attach(message);
         try
